@@ -415,6 +415,13 @@ scenarios:
       is OCR noise on a low-contrast screenshot, not an accusation - so the
       discrepancy is *reported* and the status stays short of SUSPICIOUS.
       This is the fixture that pins `inflation_material_minor` down.
+
+      The rule that reports it is R075: the amount rung is AMT_ELSE, which is
+      a field that was read on both sides and disagrees. Before R075 existed
+      this fell all the way to R999 and the merchant was told there was "not
+      enough evidence to decide" - a shrug, when the engine had in fact noticed
+      something specific and could name it. The verdict a merchant acts on is
+      unchanged; the explanation is no longer generic.
     order: {order_id: "ORD-2233", expected: "2000.00"}
     ledger:
       - {txn_id: "TX1033", external_id: "EP31447206", amount: "2000.00",
@@ -425,8 +432,85 @@ scenarios:
       sender_name: "Shahzeb Qureshi"
       occurred_at: {local: "2026-08-20T13:29:00", granularity_s: 60}
     expected_status: NEEDS_REVIEW
-    expected_rule: R999
-    expected_reasons: [AMOUNT_EXACT, CLAIM_INFLATED]
+    expected_rule: R075
+    expected_reasons: [FIELD_CONTRADICTS_MATCH, AMOUNT_EXACT, CLAIM_INFLATED]
+
+  # ------------------------------------------------------------------
+  # Contradiction: a field that was read on both sides and disagrees.
+  # Three rows, one per field that can contradict, because the bug these
+  # pin down was a *score* bug - three perfect fields dragging a fourth
+  # over tau_accept - and it is reachable from whichever field is the odd
+  # one out.
+  # ------------------------------------------------------------------
+
+  - name: contradicting-sender-name-blocks-verification
+    about: >
+      The reproduction of the bug R075 exists for. The transaction id, the
+      amount and the timestamp are all exact; the sender on the receipt is a
+      completely different person from the sender on the transaction. Three
+      perfect fields carried the aggregate to 0.823529 against a tau_accept of
+      0.82 and the engine returned VERIFIED - showing the shopkeeper a green
+      "PAYMENT VERIFIED" directly above a red cross on the sender row, and
+      telling them to hand over the goods.
+
+      Weighting the name harder would not have fixed it, it would only have
+      moved which three-good-one-bad combination slips through. Contradiction
+      is categorical, so it is a rule.
+    order: {order_id: "ORD-2290", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1090", external_id: "EP19730264", amount: "2000.00",
+         occurred_at: "2026-08-20T13:31:00+05:00", sender_name: "Farhan Bhatti"}
+    claim:
+      amount: "2000.00"
+      reference_id: "EP19730264"
+      sender_name: "Zubair Qureshi"
+      occurred_at: {local: "2026-08-20T13:31:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R075
+    expected_reasons: [FIELD_CONTRADICTS_MATCH]
+    expected_matched_txn_id: "TX1090"
+
+  - name: contradicting-reference-blocks-verification
+    about: >
+      Same shape, different odd field: the amount, the time and the sender all
+      agree, and the transaction id printed on the receipt is a different id
+      from the one on the transaction - not a suffix of it, not a confusable
+      reading of it, a different id. The receipt is evidence of *some* payment;
+      it is not evidence of this one, and a person has to look.
+    order: {order_id: "ORD-2291", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1091", external_id: "EP48250917", amount: "2000.00",
+         occurred_at: "2026-08-20T13:32:00+05:00", sender_name: "Zulqarnain Haider"}
+    claim:
+      amount: "2000.00"
+      reference_id: "MB77301468"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:32:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R075
+    expected_reasons: [FIELD_CONTRADICTS_MATCH]
+    expected_matched_txn_id: "TX1091"
+
+  - name: contradicting-timestamp-blocks-verification
+    about: >
+      The id, the amount and the sender all agree, and the receipt was printed
+      hours away from when the transaction actually settled - far enough that
+      it is not the whole-hour AM/PM artefact TS_HOUR_ART exists to forgive.
+      TS_ELSE means the two clocks were both readable and do not correspond,
+      which is a contradiction and not a rounding.
+    order: {order_id: "ORD-2292", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1092", external_id: "EP60418273", amount: "2000.00",
+         occurred_at: "2026-08-20T13:33:00+05:00", sender_name: "Zulqarnain Haider"}
+    claim:
+      amount: "2000.00"
+      reference_id: "EP60418273"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T11:07:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R075
+    expected_reasons: [FIELD_CONTRADICTS_MATCH]
+    expected_matched_txn_id: "TX1092"
 
   - name: amount-unreadable-on-receipt
     about: >

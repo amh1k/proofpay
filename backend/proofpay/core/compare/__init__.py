@@ -7,6 +7,7 @@ modules own their level ladders; every threshold they test lives in
 """
 
 from proofpay.core.compare.levels import (
+    Agreement,
     Comparison,
     FieldOutcome,
     Level,
@@ -18,6 +19,7 @@ from proofpay.core.compare.levels import (
 )
 
 __all__ = [
+    "Agreement",
     "Comparison",
     "FieldOutcome",
     "Level",

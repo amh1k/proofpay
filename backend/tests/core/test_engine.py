@@ -21,7 +21,7 @@ from itertools import pairwise
 import pytest
 
 from proofpay.core.compare.amount import AmountRelation, ClaimIntegrity
-from proofpay.core.compare.levels import FieldOutcome
+from proofpay.core.compare.levels import Agreement, FieldOutcome
 from proofpay.core.decide.engine import (
     COMPARISONS,
     ENGINE_VERSION,
@@ -38,7 +38,13 @@ from proofpay.core.decide.engine import (
     scoring_idf,
 )
 from proofpay.core.decide.policy import DecisionPolicy
-from proofpay.core.decide.rules_v1 import RULES, RULESET_VERSION, Rule, total_else
+from proofpay.core.decide.rules_v1 import (
+    CONTRADICTION_RULE_ID,
+    RULES,
+    RULESET_VERSION,
+    Rule,
+    total_else,
+)
 from proofpay.core.models import (
     Allocation,
     Decision,
@@ -102,6 +108,14 @@ def at_pkt(local: datetime, granularity_s: int = 60) -> ClaimedInstant:
 
 
 CLAIMED_AT = at_pkt(datetime(2026, 3, 4, 15, 42))
+
+#: The same payment read an hour out - the classic AM/PM or time-zone artefact
+#: a wallet receipt produces. `TS_HOUR_ART` is `Agreement.WEAK`: it is worth a
+#: second look and it does not *contradict*, so a claim built on it lands in
+#: the review band on its score alone rather than being routed there by `R075`.
+#: That distinction is why several tests below use this instead of a mismatched
+#: sender name, which since `R075` is no longer a weak match at all.
+CLAIMED_AN_HOUR_OUT = at_pkt(datetime(2026, 3, 4, 14, 42))
 
 
 def claim(
@@ -251,9 +265,27 @@ def s_r090() -> Decision:
     return run(claim(), order(), [txn()])
 
 
+def s_r075() -> Decision:
+    """The reported bug: exact id, exact amount, exact minute, wrong sender.
+
+    Three perfect fields carried the aggregate to 0.823529 against a
+    `tau_accept` of 0.82, and the merchant was shown PAYMENT VERIFIED above a
+    red cross on the sender row. This is the scenario that must never verify
+    again, whatever the aggregate says.
+    """
+    return run(claim(sender=OTHER_SENDER), order(), [txn()])
+
+
 def s_r999() -> Decision:
-    """Half the fields agree and nothing else is wrong: a human decides."""
-    return run(claim(ref=None, sender=OTHER_SENDER), order(), [txn()])
+    """Weak on every axis and wrong on none: a human decides.
+
+    No transaction id printed and a receipt clock an hour out. Nothing here
+    contradicts - `TS_HOUR_ART` is `Agreement.WEAK` - so the claim reaches the
+    fall-through on its score alone, which is what `R999` is for. It used to be
+    built from a mismatched sender name; that is now `R075`'s case, and a
+    fall-through fixture that contradicts is no longer a fall-through at all.
+    """
+    return run(claim(ref=None, when=CLAIMED_AN_HOUR_OUT), order(), [txn()])
 
 
 SCENARIOS: tuple[tuple[str, object, Status, Risk, ReasonCode | None], ...] = (
@@ -272,6 +304,13 @@ SCENARIOS: tuple[tuple[str, object, Status, Risk, ReasonCode | None], ...] = (
     ),
     ("R070", s_r070, Status.NEEDS_REVIEW, Risk.MEDIUM, ReasonCode.AMOUNT_UNDERPAID),
     ("R080", s_r080, Status.VERIFIED, Risk.LOW, ReasonCode.AMOUNT_OVERPAID),
+    (
+        "R075",
+        s_r075,
+        Status.NEEDS_REVIEW,
+        Risk.MEDIUM,
+        ReasonCode.FIELD_CONTRADICTS_MATCH,
+    ),
     ("R090", s_r090, Status.VERIFIED, Risk.LOW, ReasonCode.STRONG_FIELD_AGREEMENT),
     ("R999", s_r999, Status.NEEDS_REVIEW, Risk.MEDIUM, None),
 )
@@ -444,8 +483,26 @@ def test_a_duplicate_decision_names_the_contested_transaction():
 # Aggregate scoring
 # --------------------------------------------------------------------------
 
-def outcome(field: str, code: str, score: float) -> FieldOutcome:
-    return FieldOutcome(field=field, level_code=code, label=code, score=score)
+def outcome(
+    field: str, code: str, score: float, agreement: Agreement | None = None
+) -> FieldOutcome:
+    """A stand-in evidence row.
+
+    `agreement` is inferred from the code's suffix by default, which mirrors
+    what the real ladders declare: `*_MISSING` is unreadable, `*_ELSE` is the
+    catch-all that means the two sides disagree, and everything else in these
+    tests is a rung that agreed. Pass it explicitly to build a row whose
+    meaning does not follow that convention.
+    """
+    if agreement is None:
+        tail = code.rsplit("_", 1)[-1]
+        agreement = {
+            "MISSING": Agreement.MISSING,
+            "ELSE": Agreement.CONTRADICT,
+        }.get(tail, Agreement.AGREE)
+    return FieldOutcome(
+        field=field, level_code=code, label=code, score=score, agreement=agreement
+    )
 
 
 def test_a_perfect_match_scores_one():
@@ -660,9 +717,14 @@ def test_only_image_signals_count_as_tamper():
 
 
 def test_one_tamper_signal_alone_does_not_accuse():
-    """Every WhatsApp forward is re-compressed; the default limit tolerates one."""
+    """Every WhatsApp forward is re-compressed; the default limit tolerates one.
+
+    The receipt is weak on its own terms - no transaction id, a clock an hour
+    out - and contradicts nothing, so the only thing that could push it past
+    NEEDS_REVIEW is the image signal. It does not.
+    """
     decision = run(
-        claim(ref=None, sender=OTHER_SENDER),
+        claim(ref=None, when=CLAIMED_AN_HOUR_OUT),
         order(),
         [txn()],
         observations=(ObservationCode.IMAGE_RECOMPRESSED,),
@@ -1012,7 +1074,7 @@ def test_a_partially_trusted_source_that_matches_weakly_is_still_just_weak():
     that was never going to verify is not a trust problem, and must keep the
     answer it had."""
     decision = run(
-        claim(ref=None, sender=OTHER_SENDER),
+        claim(ref=None, when=CLAIMED_AN_HOUR_OUT),
         order(),
         [txn(source=Source.MERCHANT_CSV)],
     )
@@ -1024,6 +1086,53 @@ def test_provenance_is_settled_before_any_rule_offers_to_release_goods():
     order_of = {rule.id: i for i, rule in enumerate(RULES)}
     verified = [rule.id for rule in RULES if rule.status is Status.VERIFIED]
     assert order_of["R065"] < min(order_of[i] for i in verified)
+
+
+def test_a_contradicting_field_is_settled_before_any_rule_offers_to_release_goods():
+    """`R075` outranks *both* verifying rules, not just the general one.
+
+    `R080` verifies an overpayment and `R090` verifies the plain case; a
+    contradicted match must be blocked from either, so the assertion is over
+    the whole set rather than over `R090` alone.
+    """
+    order_of = {rule.id: i for i, rule in enumerate(RULES)}
+    verified = [rule.id for rule in RULES if rule.status is Status.VERIFIED]
+    assert set(verified) == {"R080", "R090"}
+    assert order_of[CONTRADICTION_RULE_ID] < min(order_of[i] for i in verified)
+
+
+def test_the_safety_negative_rules_still_outrank_the_contradiction_rule():
+    """Demo case 2 is the one to watch.
+
+    `AMT_SCALED` is a contradicting level, so a contradiction rule placed too
+    high would take Rs 5,000-claimed-against-Rs 500 away from `R030` and
+    downgrade the headline finding of the whole demo from SUSPICIOUS to "a
+    human should look". DUPLICATE and SUSPICIOUS are more specific and more
+    serious answers, and they keep precedence.
+    """
+    order_of = {rule.id: i for i, rule in enumerate(RULES)}
+    for stronger in ("R020", "R030"):
+        assert order_of[stronger] < order_of[CONTRADICTION_RULE_ID]
+
+    scaled = s_r030()
+    assert scaled.fired_rule_id == "R030"
+    assert scaled.status is Status.SUSPICIOUS
+    assert any(e.level_code == "AMT_SCALED" for e in scaled.evidence)
+    assert any(e.contradicts for e in scaled.evidence)
+
+
+def test_a_duplicate_outranks_the_contradiction_rule_too():
+    """A reused transaction is a stronger finding than a disputed field, and
+    the merchant needs to be told about the other order first."""
+    reused = run(
+        claim(sender=OTHER_SENDER),
+        order(),
+        [txn()],
+        [Allocation(txn_id="TX1001", order_id="O-OTHER")],
+    )
+    assert any(e.contradicts for e in reused.evidence)
+    assert reused.fired_rule_id == "R020"
+    assert reused.status is Status.DUPLICATE
 
 
 # --------------------------------------------------------------------------
@@ -1178,13 +1287,20 @@ def test_a_retuned_level_cut_point_moves_the_verdict_and_the_fingerprint_togethe
 def test_a_retuned_field_weight_moves_the_verdict_and_the_fingerprint_together():
     """The same claim for the weights, which steer just as hard as a cut-point.
 
-    A printed transaction id, the right amount and the right minute, against a
-    sender name that does not agree at all. Under the shipped weights the name
-    is the weakest of the four signals and the claim verifies at 0.824; weigh
-    the name like a transaction id and the same evidence lands in review.
+    A printed transaction id, the right amount, the right sender, and a receipt
+    clock a whole hour out. Under the shipped weights the timestamp is worth
+    0.8 of a field and the claim verifies at 0.824; weigh the clock like a
+    transaction id and the same evidence lands in review.
+
+    This used to be written with a *mismatched sender name*, and it asserted
+    that such a claim VERIFIED - which is precisely the bug `R075` fixes. The
+    property under test is the weights, not the name, so the fixture moves to a
+    field that is weak (`TS_HOUR_ART`) rather than one that contradicts: a
+    contradicted match is now blocked at any weighting, which would make the
+    first assertion untestable and the second vacuous.
     """
-    heavier = DecisionPolicy(w_sender_name=1.0)
-    inputs = (claim(sender=OTHER_SENDER), order(), [txn()])
+    heavier = DecisionPolicy(w_timestamp=1.0)
+    inputs = (claim(when=CLAIMED_AN_HOUR_OUT), order(), [txn()])
     assert run(*inputs).status is Status.VERIFIED
     assert run(*inputs, policy=heavier).status is not Status.VERIFIED
     assert heavier.fingerprint() != POLICY.fingerprint()

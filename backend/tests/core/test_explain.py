@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from proofpay.core.compare.levels import Agreement
 from proofpay.core.decide.engine import decide
 from proofpay.core.decide.policy import DecisionPolicy
 from proofpay.core.explain import (
@@ -554,70 +555,129 @@ def test_an_overpaid_verified_summary_still_names_both_figures():
 #     "Muhammad Ali" byte for byte.
 # R3: `AMT_SCALED` (0.35) is a deliberate factor-of-ten digit edit and rendered
 #     a caution: softer than the cross on a plain `AMT_ELSE` mismatch (0.00).
+#
+# The meaning itself has since moved out of this module. `explain.py` used to
+# hold its own `_MARK_BY_LEVEL` table, which made presentation the only place
+# that knew which levels contradict — and the decision engine, which needs the
+# same fact to refuse to verify a contradicted match, could not read it without
+# importing the renderer. It is now `Level.agreement`, declared beside the rung
+# in `compare/levels.py`, and both layers consume it. These tests therefore pin
+# two separate things: that the shipped classification still says what it said
+# (below), and that the renderer translates it faithfully.
 # --------------------------------------------------------------------------
 
 DEMO_NAME = "Muhammad Ali"   # overview.md section 8 case 1, identical both sides
 
 #: Every level code the comparisons can produce today, with the score it
-#: actually carries and the mark it must render. The scores are here on
-#: purpose: they are what a score band would have keyed on, so a table that
-#: disagrees with them is the point.
-LEVEL_MARKS: tuple[tuple[str, float, str], ...] = (
-    ("REF_EXACT", 1.00, MARK_AGREE),
-    ("REF_CONFUSABLE", 0.90, MARK_AGREE),
-    ("REF_SUFFIX", 0.75, MARK_AGREE),
-    ("REF_PARTIAL", 0.55, MARK_CAUTION),
-    ("REF_MISSING", 0.00, MARK_UNKNOWN),
-    ("REF_ELSE", 0.00, MARK_CONFLICT),
-    ("AMT_EXACT", 1.00, MARK_AGREE),
-    ("AMT_TOLERANCE", 0.90, MARK_AGREE),
-    ("AMT_SCALED", 0.35, MARK_CONFLICT),
-    ("AMT_MISSING", 0.00, MARK_UNKNOWN),
-    ("AMT_ELSE", 0.00, MARK_CONFLICT),
-    ("TS_TIGHT", 1.00, MARK_AGREE),
-    ("TS_CLOSE", 0.85, MARK_AGREE),
-    ("TS_DATE_ONLY", 0.60, MARK_CAUTION),
-    ("TS_LOOSE", 0.50, MARK_CAUTION),
-    ("TS_HOUR_ART", 0.25, MARK_CAUTION),
-    ("TS_MISSING", 0.00, MARK_UNKNOWN),
-    ("TS_ELSE", 0.00, MARK_CONFLICT),
-    ("NAME_EXACT", 1.00, MARK_AGREE),
-    ("NAME_STRONG", 0.90, MARK_AGREE),
-    ("NAME_MASK_OK", 0.85, MARK_AGREE),
-    ("NAME_INITIALS", 0.80, MARK_AGREE),
-    ("NAME_PARTIAL", 0.55, MARK_CAUTION),
-    ("NAME_COMMON_ONLY", 0.20, MARK_CAUTION),
-    ("NAME_MISSING", 0.00, MARK_UNKNOWN),
-    ("NAME_ELSE", 0.00, MARK_CONFLICT),
+#: actually carries, the meaning it declares and the mark that meaning must
+#: render as. The scores are here on purpose: they are what a score band would
+#: have keyed on, so a table that disagrees with them is the point.
+#:
+#: This is a *pin*, not a source. The source is `Level.agreement` in
+#: `compare/levels.py`; `test_the_shipped_ladders_still_declare_these_meanings`
+#: below asserts the two agree, so re-classifying a level is a visible diff in
+#: this file rather than a silent change to what a merchant is shown.
+LEVEL_MARKS: tuple[tuple[str, float, Agreement, str], ...] = (
+    ("REF_EXACT", 1.00, Agreement.AGREE, MARK_AGREE),
+    ("REF_CONFUSABLE", 0.90, Agreement.AGREE, MARK_AGREE),
+    ("REF_SUFFIX", 0.75, Agreement.AGREE, MARK_AGREE),
+    ("REF_PARTIAL", 0.55, Agreement.WEAK, MARK_CAUTION),
+    ("REF_MISSING", 0.00, Agreement.MISSING, MARK_UNKNOWN),
+    ("REF_ELSE", 0.00, Agreement.CONTRADICT, MARK_CONFLICT),
+    ("AMT_EXACT", 1.00, Agreement.AGREE, MARK_AGREE),
+    ("AMT_TOLERANCE", 0.90, Agreement.AGREE, MARK_AGREE),
+    ("AMT_SCALED", 0.35, Agreement.CONTRADICT, MARK_CONFLICT),
+    ("AMT_MISSING", 0.00, Agreement.MISSING, MARK_UNKNOWN),
+    ("AMT_ELSE", 0.00, Agreement.CONTRADICT, MARK_CONFLICT),
+    ("TS_TIGHT", 1.00, Agreement.AGREE, MARK_AGREE),
+    ("TS_CLOSE", 0.85, Agreement.AGREE, MARK_AGREE),
+    ("TS_DATE_ONLY", 0.60, Agreement.WEAK, MARK_CAUTION),
+    ("TS_LOOSE", 0.50, Agreement.WEAK, MARK_CAUTION),
+    ("TS_HOUR_ART", 0.25, Agreement.WEAK, MARK_CAUTION),
+    ("TS_MISSING", 0.00, Agreement.MISSING, MARK_UNKNOWN),
+    ("TS_ELSE", 0.00, Agreement.CONTRADICT, MARK_CONFLICT),
+    ("NAME_EXACT", 1.00, Agreement.AGREE, MARK_AGREE),
+    ("NAME_STRONG", 0.90, Agreement.AGREE, MARK_AGREE),
+    ("NAME_MASK_OK", 0.85, Agreement.AGREE, MARK_AGREE),
+    ("NAME_INITIALS", 0.80, Agreement.AGREE, MARK_AGREE),
+    ("NAME_PARTIAL", 0.55, Agreement.WEAK, MARK_CAUTION),
+    ("NAME_COMMON_ONLY", 0.20, Agreement.WEAK, MARK_CAUTION),
+    ("NAME_MISSING", 0.00, Agreement.MISSING, MARK_UNKNOWN),
+    ("NAME_ELSE", 0.00, Agreement.CONTRADICT, MARK_CONFLICT),
 )
 
 #: How loud each mark is. Only the ordering matters.
 SEVERITY = {MARK_AGREE: 0, MARK_UNKNOWN: 1, MARK_CAUTION: 2, MARK_CONFLICT: 3}
 
 
-def outcome(code: str, score: float, field: str = "sender_name") -> FieldOutcome:
-    return FieldOutcome(field=field, level_code=code, label=code, score=score)
+def outcome(
+    code: str,
+    score: float,
+    field: str = "sender_name",
+    agreement: Agreement = Agreement.AGREE,
+) -> FieldOutcome:
+    return FieldOutcome(
+        field=field, level_code=code, label=code, score=score, agreement=agreement
+    )
 
 
 @pytest.mark.parametrize(
-    ("code", "score", "expected"),
+    ("code", "score", "agreement", "expected"),
     LEVEL_MARKS,
-    ids=[code for code, _, _ in LEVEL_MARKS],
+    ids=[code for code, _, _, _ in LEVEL_MARKS],
 )
-def test_the_mark_is_the_levels_meaning_not_its_score(code, score, expected):
+def test_the_mark_is_the_levels_meaning_not_its_score(code, score, agreement, expected):
+    """Every shipped level, rendered from what it declares.
+
+    The score is passed in and deliberately ignored by the renderer: rows like
+    `NAME_COMMON_ONLY` (0.20, agrees) and `AMT_SCALED` (0.35, contradicts) are
+    in this table precisely because a score band gets both of them backwards.
+    """
     from proofpay.core.explain import _mark
 
-    assert _mark(outcome(code, score)) == expected
+    assert _mark(outcome(code, score, agreement=agreement)) == expected
 
 
-def test_a_level_nobody_has_classified_still_renders_from_the_score_band():
-    """Defence in depth: a comparison level added tomorrow renders something
-    rather than crashing in front of a customer."""
-    from proofpay.core.explain import _mark
+def test_the_shipped_ladders_still_declare_these_meanings():
+    """The pin. `LEVEL_MARKS` above is this test file's copy of what each rung
+    means; `Level.agreement` is the real one. Re-classifying a level is a
+    legitimate act, and it has to show up as a diff here rather than silently
+    changing what a merchant is shown - or what the rule table refuses to
+    verify, which reads the same field."""
+    from proofpay.core.compare.amount_match import AMOUNT_MATCH
+    from proofpay.core.compare.name import SENDER_NAME
+    from proofpay.core.compare.reference import REFERENCE
+    from proofpay.core.compare.timestamp import TIMESTAMP
 
-    assert _mark(outcome("NAME_SOMETHING_NEW", 0.95)) == MARK_AGREE
-    assert _mark(outcome("NAME_SOMETHING_NEW", 0.50)) == MARK_CAUTION
-    assert _mark(outcome("NAME_SOMETHING_NEW", 0.05)) == MARK_CONFLICT
+    pinned = {code: agreement for code, _, agreement, _ in LEVEL_MARKS}
+    for comparison in (REFERENCE, AMOUNT_MATCH, TIMESTAMP, SENDER_NAME):
+        for level in comparison.levels:
+            assert pinned[level.code] == level.agreement, (
+                f"{level.code} now declares {level.agreement}; this test pins "
+                f"{pinned[level.code]}"
+            )
+
+
+def test_there_is_no_unclassified_level_left_to_guess_at():
+    """The score-band fallback is gone, and this is why it could go.
+
+    `explain.py` used to fall back to `_AGREE_PCT`/`_CONFLICT_PCT` for a level
+    code nobody had classified - the very band that rendered
+    `NAME_COMMON_ONLY`'s agreement as a red cross. It existed because the
+    classification lived in a lookup table that a new level could miss.
+    `Agreement` is a required field on `Level` and a closed enum, so every
+    outcome carries a meaning and every meaning has a mark: the mapping is
+    total, and there is nothing left for a fallback to catch.
+    """
+    from proofpay.core import explain as explain_mod
+    from proofpay.core.explain import _MARK_BY_AGREEMENT, _mark
+
+    assert set(_MARK_BY_AGREEMENT) == set(Agreement)
+    assert not hasattr(explain_mod, "_MARK_BY_LEVEL")
+    assert not hasattr(explain_mod, "_AGREE_PCT")
+    assert not hasattr(explain_mod, "_CONFLICT_PCT")
+    for agreement in Agreement:
+        assert _mark(outcome("X_ANYTHING", 0.5, agreement=agreement)) in SEVERITY
 
 
 def test_every_level_in_every_comparison_renders_one_of_the_four_marks():
@@ -626,19 +686,22 @@ def test_every_level_in_every_comparison_renders_one_of_the_four_marks():
     from proofpay.core.compare.name import name_comparison
     from proofpay.core.compare.reference import REFERENCE
     from proofpay.core.compare.timestamp import TIMESTAMP
-    from proofpay.core.explain import _MARK_BY_LEVEL, _mark
+    from proofpay.core.explain import _mark
 
-    declared = {code: mark for code, _, mark in LEVEL_MARKS}
+    declared = {code: mark for code, _, _, mark in LEVEL_MARKS}
     ladders = (REFERENCE, AMOUNT_MATCH, TIMESTAMP, name_comparison("sender_name"))
     for comparison in ladders:
         for level in comparison.levels:
-            mark = _mark(outcome(level.code, level.score, comparison.field))
-            assert mark in SEVERITY
-            if level.code in _MARK_BY_LEVEL:
-                assert mark == declared[level.code], (
-                    f"{level.code} is classified in explain.py but LEVEL_MARKS "
-                    "in this test disagrees"
+            mark = _mark(
+                outcome(
+                    level.code, level.score, comparison.field, agreement=level.agreement
                 )
+            )
+            assert mark in SEVERITY
+            assert mark == declared[level.code], (
+                f"{level.code} declares {level.agreement} but LEVEL_MARKS in "
+                "this test expects a different mark"
+            )
 
 
 def test_a_byte_identical_common_name_is_not_rendered_as_a_contradiction():
@@ -831,43 +894,46 @@ def test_only_a_reasonless_decision_says_there_is_not_enough_evidence():
     assert underpaid().summary != generic
 
 
-def test_every_level_code_that_exists_has_a_declared_mark():
-    """The seam between a comparison and its rendering.
+def test_every_level_code_in_every_comparison_has_a_declared_agreement():
+    """The seam between a comparison, the rule table and this renderer.
 
-    `_MARK_BY_LEVEL` is keyed by level code, and a level added or renamed in
-    `compare/` lands on the `_AGREE_PCT`/`_CONFLICT_PCT` fallback silently -
-    which is precisely the score band that rendered `NAME_COMMON_ONLY`'s 0.20
-    agreement as a red contradiction. The fallback has to stay (a new
-    comparison must render rather than crash at a counter) so this asserts the
-    map is *exhausted* instead, and fails on the day a level appears without
-    anyone deciding what it means.
+    The classification used to be a lookup table in `explain.py` keyed by level
+    code, and a level added or renamed in `compare/` fell through it onto a
+    score band silently - which is what rendered `NAME_COMMON_ONLY`'s 0.20
+    agreement as a red contradiction. It is now a required field on `Level`, so
+    "every level is classified" is true by construction rather than by
+    vigilance; this walks the live ladders and says so out loud, including the
+    `*_MISSING` rungs, which the old table deliberately could not cover.
 
-    `*_MISSING` levels are excluded deliberately: absence is settled before the
-    map is consulted, and listing them would claim a direction for a field
-    nobody could read.
+    It also checks this test file's own pin has not gone stale in the other
+    direction: a code listed here that no comparison produces means a level was
+    renamed or removed, and a renamed level code is a broken contract.
     """
     from proofpay.core.compare.amount_match import AMOUNT_MATCH
     from proofpay.core.compare.name import SENDER_NAME
     from proofpay.core.compare.reference import REFERENCE
     from proofpay.core.compare.timestamp import TIMESTAMP
-    from proofpay.core.explain import _MARK_BY_LEVEL
 
+    ladders = (REFERENCE, AMOUNT_MATCH, TIMESTAMP, SENDER_NAME)
     real = {
-        level.code
-        for comparison in (REFERENCE, AMOUNT_MATCH, TIMESTAMP, SENDER_NAME)
+        level.code: level
+        for comparison in ladders
         for level in comparison.levels
     }
-    declared = set(_MARK_BY_LEVEL)
+    for code, level in real.items():
+        assert isinstance(level.agreement, Agreement), (
+            f"{code} declares no Agreement"
+        )
+        # The suffix convention and the declared meaning are one statement made
+        # twice, and `Level.__post_init__` ties them together.
+        assert (level.agreement is Agreement.MISSING) == code.endswith("_MISSING")
 
-    undeclared = {code for code in real - declared if not code.endswith("_MISSING")}
-    assert not undeclared, (
-        f"level codes with no declared mark, falling back to the score band: "
-        f"{sorted(undeclared)}"
+    pinned = {code for code, _, _, _ in LEVEL_MARKS}
+    assert not pinned - set(real), (
+        f"this test pins levels no comparison produces (renamed or removed?): "
+        f"{sorted(pinned - set(real))}"
     )
-
-    assert not declared - real, (
-        f"the mark map names levels no comparison produces (renamed or removed?): "
-        f"{sorted(declared - real)}"
+    assert not set(real) - pinned, (
+        f"levels nobody has pinned a mark for in this file: "
+        f"{sorted(set(real) - pinned)}"
     )
-
-    assert not {c for c in declared if c.endswith("_MISSING")}

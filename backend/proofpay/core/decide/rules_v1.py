@@ -19,6 +19,14 @@ merchant-ops person needs to edit thresholds in a UI.
    and `R080` sit above the plain `R090`, and the provenance check `R065` sits
    above all three: how much a record is trusted is a question about the
    evidence, and it has to be settled before any rule offers to release goods.
+   `R075` joins them for the same reason: a field that *contradicts* the match
+   is a question about the evidence too, and one no aggregate score can put:
+   three perfect fields carry a fourth that flatly disagrees over `tau_accept`.
+   It sits above **both** verifying rules because both must be blocked, and
+   below the safety-negative ones because DUPLICATE and SUSPICIOUS are stronger
+   answers than "a human should look" and must keep outranking it — demo case 2
+   (Rs 5,000 claimed against Rs 500 received) is exactly that: `AMT_SCALED`
+   contradicts, and `R030` must still take it.
 4. **A total ELSE.** `R999` is non-negotiable, exactly as every `Comparison`
    ends in an ELSE level. It is enforced structurally below, not hoped for.
 5. **Rule ids leave gaps** so a rule can be inserted without renumbering, and
@@ -43,11 +51,21 @@ from proofpay.core.reasons import ReasonCode, Risk, Status
 if TYPE_CHECKING:  # pragma: no cover - import only for the annotation
     from proofpay.core.decide.engine import Context
 
-__all__ = ["RULES", "RULESET_VERSION", "Rule", "total_else"]
+__all__ = [
+    "CONTRADICTION_RULE_ID",
+    "RULES",
+    "RULESET_VERSION",
+    "Rule",
+    "total_else",
+]
+
+#: The rule that stops a contradicted match from verifying. Named because its
+#: *position* is the guarantee, and `_validate` below asserts that position.
+CONTRADICTION_RULE_ID = "R075"
 
 #: Pinned alongside the policy fingerprint on every `Decision`. Bump on any
 #: change to the table — including a reordering, which changes outcomes.
-RULESET_VERSION = "rules-v1.4.0"
+RULESET_VERSION = "rules-v1.5.0"
 
 
 def total_else(ctx: Context) -> bool:
@@ -157,6 +175,29 @@ RULES: tuple[Rule, ...] = (
         (ReasonCode.AMOUNT_UNDERPAID,),
         "Matched, but less than the order total was received.",
     ),
+    # A field that contradicts the match. Not a score problem: a claim carrying
+    # the right transaction id, the right amount and the right time, under a
+    # completely different sender name, scored 0.823529 against a `tau_accept`
+    # of 0.82 and verified — handing the merchant a screen that read PAYMENT
+    # VERIFIED above a red ✗ on the sender row. Weighting the name harder does
+    # not fix that; it just moves which combination of three-good-one-bad slips
+    # through. Contradiction is categorical, so it is a rule.
+    #
+    # Placement is the whole design. Above `R080` and `R090` because *both*
+    # verifications must be blocked. Below `R020`/`R030` because a reused
+    # transaction and an inflated claim are more specific and more serious
+    # findings than "a human should look", and this rule must never soften one:
+    # `AMT_SCALED` contradicts, so an unplaced version of this rule would steal
+    # demo case 2 away from SUSPICIOUS. Below `R040`-`R070` for the same reason
+    # — each of those already names the specific thing that is wrong.
+    Rule(
+        "R075",
+        lambda c: c.has_contradicting_field,
+        Status.NEEDS_REVIEW,
+        Risk.MEDIUM,
+        (ReasonCode.FIELD_CONTRADICTS_MATCH,),
+        "A field on the receipt actively contradicts the transaction it matched.",
+    ),
     Rule(
         "R080",
         lambda c: c.best_score >= c.policy.tau_accept
@@ -212,6 +253,29 @@ def _validate(rules: tuple[Rule, ...]) -> None:
         # A VERIFIED decision with no reason code cannot be explained to the
         # merchant it is telling to hand over goods.
         raise ValueError("a VERIFIED rule must carry at least one reason code")
+    _validate_contradiction_precedes_verification(rules)
+
+
+def _validate_contradiction_precedes_verification(rules: tuple[Rule, ...]) -> None:
+    """The contradiction rule outranks every rule that can verify.
+
+    Checked structurally rather than left to the reader's eye on the table,
+    because the failure it prevents is silent: reorder `R075` below `R090` and
+    every test still passes except the handful that happen to build a
+    contradicting field, while the product goes back to showing PAYMENT
+    VERIFIED above a red cross. Position is precedence, so position is an
+    invariant worth asserting.
+    """
+    ids = [r.id for r in rules]
+    if CONTRADICTION_RULE_ID not in ids:
+        raise ValueError(f"the contradiction rule {CONTRADICTION_RULE_ID} has been removed")
+    blocker = ids.index(CONTRADICTION_RULE_ID)
+    above = [r.id for r in rules[:blocker] if r.status is Status.VERIFIED]
+    if above:
+        raise ValueError(
+            f"{above} can verify but sit above {CONTRADICTION_RULE_ID}; a field "
+            "that contradicts the match would no longer block verification"
+        )
 
 
 _validate(RULES)

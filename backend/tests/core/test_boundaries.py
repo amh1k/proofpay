@@ -47,7 +47,7 @@ from proofpay.core.compare.amount import (
     is_power_of_ten_multiple,
 )
 from proofpay.core.compare.amount_match import AMOUNT_MATCH, compare_amount_match
-from proofpay.core.compare.levels import FieldOutcome
+from proofpay.core.compare.levels import Agreement, FieldOutcome
 from proofpay.core.compare.name import name_metrics
 from proofpay.core.compare.reference import compare_reference, reference_ctx
 from proofpay.core.compare.timestamp import (
@@ -152,8 +152,26 @@ def txn(
     )
 
 
-def outcome(field: str, code: str, score: float) -> FieldOutcome:
-    return FieldOutcome(field=field, level_code=code, label=code, score=score)
+def outcome(
+    field: str, code: str, score: float, agreement: Agreement | None = None
+) -> FieldOutcome:
+    """A stand-in evidence row.
+
+    `agreement` is inferred from the code's suffix by default, which mirrors
+    what the real ladders declare: `*_MISSING` is unreadable, `*_ELSE` is the
+    catch-all that means the two sides disagree, and everything else in these
+    tests is a rung that agreed. Pass it explicitly to build a row whose
+    meaning does not follow that convention.
+    """
+    if agreement is None:
+        tail = code.rsplit("_", 1)[-1]
+        agreement = {
+            "MISSING": Agreement.MISSING,
+            "ELSE": Agreement.CONTRADICT,
+        }.get(tail, Agreement.AGREE)
+    return FieldOutcome(
+        field=field, level_code=code, label=code, score=score, agreement=agreement
+    )
 
 
 def candidate(
@@ -161,9 +179,15 @@ def candidate(
 ) -> ScoredCandidate:
     """A scored candidate whose aggregate is exactly `score`.
 
-    The field outcomes carry no weight in these tests — `first_match` reads
-    `best_score`, never the rows — except for the reference rung, which is
-    what the dominance escape hatch keys off.
+    The rows exist to carry two things and nothing else: the reference rung the
+    dominance escape hatch keys off, and — since `R075` — a declared agreement,
+    because a row that *contradicts* now steers the decision by itself.
+
+    So the non-dominant rung is `REF_MISSING`, not `REF_ELSE`. These tests are
+    about where `tau_accept` and `tau_margin` cut, and a placeholder row that
+    quietly meant "this field disagrees" would route every one of them to
+    `R075` and stop them measuring the thresholds they were written for. The
+    contradiction rule gets its own boundary tests below.
     """
     return ScoredCandidate(
         txn=txn(txn_id),
@@ -171,7 +195,7 @@ def candidate(
         outcomes={
             "reference": outcome(
                 "reference",
-                "REF_EXACT" if ref_exact else "REF_ELSE",
+                "REF_EXACT" if ref_exact else "REF_MISSING",
                 1.0 if ref_exact else 0.0,
             )
         },

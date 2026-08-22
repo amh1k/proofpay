@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from proofpay.core.compare.levels import FieldOutcome
+from proofpay.core.compare.levels import Agreement, FieldOutcome
 from proofpay.core.decide.policy import DecisionPolicy
 from proofpay.core.models import LedgerTxn, PaymentClaim, ScoredCandidate
 from proofpay.core.money import Money
@@ -462,7 +462,14 @@ def scored(txn_id: str, score: float, *, ref_level: str | None = None) -> Scored
     outcomes = {}
     if ref_level is not None:
         outcomes["reference"] = FieldOutcome(
-            field="reference", level_code=ref_level, label="ref", score=1.0
+            field="reference",
+            level_code=ref_level,
+            label="ref",
+            score=1.0,
+            # Dominance keys off the level *code*; the declared meaning is
+            # irrelevant to it, and AGREE is the honest value for a rung these
+            # tests only ever populate with a reference that matched.
+            agreement=Agreement.AGREE,
         )
     return ScoredCandidate(txn=txn(txn_id), score=score, outcomes=outcomes)
 

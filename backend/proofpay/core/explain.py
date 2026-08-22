@@ -16,12 +16,20 @@ it fired. No prose is reverse-engineered out of a float, and no verdict is
 re-derived: the frontend formats this contract, it does not reinterpret it.
 
 The one thing this module does decide is *display*: which mark a row wears and,
-for a couple of levels, how the row is worded. Both are keyed by the stable
-level code and neither can move a decision — but both are chosen from what the
-level **means**, never from its score. A score says how much evidence a field
-is worth; it does not say which way that evidence points, and rendering "the
-names agree, but on a name too common to prove anything" as a red ✗ tells the
-merchant the opposite of what the engine found.
+for a couple of levels, how the row is worded. Neither can move a decision, and
+both are chosen from what the level **means**, never from its score. A score
+says how much evidence a field is worth; it does not say which way that
+evidence points, and rendering "the names agree, but on a name too common to
+prove anything" as a red ✗ tells the merchant the opposite of what the engine
+found.
+
+That meaning is *not this module's to decide*. It is `Level.agreement`,
+declared beside the rung it describes in `compare/levels.py`, and the rule
+table reads the same field to refuse to verify a match some field contradicts.
+This module used to keep its own copy keyed by level code, which made
+presentation the only layer that knew what a level meant and left the engine
+unable to consult it without importing a renderer. There is one source now; the
+mark is a translation of it.
 
 Two deliberate absences:
 
@@ -39,7 +47,7 @@ from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from typing import Final
 
-from proofpay.core.compare.levels import FieldOutcome
+from proofpay.core.compare.levels import Agreement, FieldOutcome
 from proofpay.core.models import Decision, LedgerTxn, Order, PaymentClaim
 from proofpay.core.money import Money
 from proofpay.core.reasons import ObservationCode, ReasonCode, Risk, Status
@@ -76,51 +84,22 @@ MARK_UNKNOWN: Final[str] = "?"         # unreadable — absence, not disagreemen
 #: real, so keep them apart: the mark carries the direction, `FieldOutcome.score`
 #: still carries the strength, and neither changes a decision.
 #:
-#: Keyed by the stable level code, so rewording a level's label cannot silently
-#: move its mark. `*_MISSING` levels are not listed — absence is handled ahead of
-#: this table, because an unread field is not a disagreement.
-_MARK_BY_LEVEL: Final[Mapping[str, str]] = {
-    # Transaction ID. A suffix or a confusable-character reading is still the
-    # same identifier, shown the way the receipt happened to print it.
-    "REF_EXACT": MARK_AGREE,
-    "REF_CONFUSABLE": MARK_AGREE,
-    "REF_SUFFIX": MARK_AGREE,
-    "REF_PARTIAL": MARK_CAUTION,        # the alignment itself is a guess
-    "REF_ELSE": MARK_CONFLICT,
-    # Amount. AMT_SCALED is not a near miss: Rs 500 becoming Rs 5,000 is the
-    # signature edit this product exists to catch, so it renders at least as
-    # severely as an ordinary mismatch.
-    "AMT_EXACT": MARK_AGREE,
-    "AMT_TOLERANCE": MARK_AGREE,
-    "AMT_SCALED": MARK_CONFLICT,
-    "AMT_ELSE": MARK_CONFLICT,
-    # Time. A whole-hour offset is the classic AM/PM or time-zone artefact —
-    # worth a second look, not an accusation.
-    "TS_TIGHT": MARK_AGREE,
-    "TS_CLOSE": MARK_AGREE,
-    "TS_DATE_ONLY": MARK_CAUTION,       # consistent, but only to the day
-    "TS_LOOSE": MARK_CAUTION,
-    "TS_HOUR_ART": MARK_CAUTION,
-    "TS_ELSE": MARK_CONFLICT,
-    # Names. Every level above NAME_ELSE describes a name that *agrees*; only
-    # how much that agreement is worth differs.
-    "NAME_EXACT": MARK_AGREE,
-    "NAME_STRONG": MARK_AGREE,
-    "NAME_MASK_OK": MARK_AGREE,
-    "NAME_INITIALS": MARK_AGREE,
-    "NAME_PARTIAL": MARK_CAUTION,
-    "NAME_COMMON_ONLY": MARK_CAUTION,
-    "NAME_ELSE": MARK_CONFLICT,
+#: The direction itself is **not decided here**. It is `Level.agreement`,
+#: declared beside the rung it describes in `compare/levels.py`, because the
+#: rule table blocks a verification on a contradicting field and this module
+#: draws a cross on it — the same question, asked by two layers that must never
+#: answer it differently. This module owns only the glyph.
+#:
+#: Total by construction: `Agreement` is a closed enum and every level is
+#: required to declare one, so there is no unclassified level to fall back for.
+#: The score band that used to serve as that fallback is gone with it — it was
+#: the thing that rendered `NAME_COMMON_ONLY`'s agreement as a red cross.
+_MARK_BY_AGREEMENT: Final[Mapping[Agreement, str]] = {
+    Agreement.AGREE: MARK_AGREE,
+    Agreement.WEAK: MARK_CAUTION,
+    Agreement.CONTRADICT: MARK_CONFLICT,
+    Agreement.MISSING: MARK_UNKNOWN,
 }
-
-#: Display bands for the marks, as integer percentages of a field's evidence
-#: score. Fallback only, for a level code added to a comparison before its
-#: display semantics were declared above — a new comparison still renders
-#: something rather than crashing at a counter. Integers on purpose: `core`
-#: holds no float threshold outside `decide/policy.py`, and these steer nothing
-#: — a mark changes what a row looks like, never what the decision was.
-_AGREE_PCT: Final[int] = 80
-_CONFLICT_PCT: Final[int] = 20
 
 #: The order a person reads the evidence in, which is not alphabetical.
 #: Anything unlisted follows, sorted, so a new comparison still renders.
@@ -259,22 +238,13 @@ def _format_claimed_instant(claimed: ClaimedInstant | None, tz: tzinfo) -> str:
 def _mark(outcome: FieldOutcome) -> str:
     """The tick, cross, warning or question mark for one evidence row.
 
-    Decided by the level's meaning (`_MARK_BY_LEVEL`), never by its score: a
-    cross is an accusation, and a field that agrees weakly must not make one.
-    Absence is settled first, then the table, then — only for a level nobody
-    has classified yet — the score band.
+    A pure translation of `FieldOutcome.agreement` — the level's own declared
+    meaning — into a glyph, never a reading of its score: a cross is an
+    accusation, and a field that agrees weakly must not make one. Absence
+    arrives as `Agreement.MISSING` and gets its own mark, because an unread
+    field is not a disagreement.
     """
-    if outcome.is_missing:
-        return MARK_UNKNOWN
-    mapped = _MARK_BY_LEVEL.get(outcome.level_code)
-    if mapped is not None:
-        return mapped
-    pct = round(outcome.score * 100)
-    if pct >= _AGREE_PCT:
-        return MARK_AGREE
-    if pct <= _CONFLICT_PCT:
-        return MARK_CONFLICT
-    return MARK_CAUTION
+    return _MARK_BY_AGREEMENT[outcome.agreement]
 
 
 def _verdict(outcome: FieldOutcome) -> str:
@@ -394,6 +364,41 @@ def _received_amount(
     return _ABSENT
 
 
+def _contradiction_sentence(decision: Decision) -> str:
+    """Which field disagrees, in the merchant's own words.
+
+    Names the field, because "needs review" on its own sends a shopkeeper back
+    to a table to work out what the engine noticed. Deliberately says *does not
+    match* and not *fraud*: the engine found a disagreement between a receipt
+    and a ledger row, which a wrong customer, a joint account, a shared phone
+    or a genuinely edited screenshot can all produce. Deciding which of those it
+    was is the human's job, and the sentence is worded so it does not pre-empt
+    them.
+
+    Built from `decision.evidence` alone, so a caller replaying a stored
+    decision without the ledger row gets the same sentence.
+    """
+    fields = [
+        _FIELD_LABELS.get(e.field, e.field.replace("_", " ")).lower()
+        for e in sorted(decision.evidence, key=lambda e: _field_sort_key(e.field))
+        if e.contradicts
+    ]
+    if not fields:
+        # Only reachable if a caller hand-built a decision carrying the reason
+        # code without the evidence behind it. Say the true, weaker thing.
+        return "One of the details does not match the transaction this receipt points to."
+    if len(fields) == 1:
+        return (
+            f"The {fields[0]} does not match the transaction this receipt "
+            f"otherwise points to."
+        )
+    listed = f"{', '.join(fields[:-1])} and {fields[-1]}"
+    return (
+        f"The {listed} do not match the transaction this receipt otherwise "
+        f"points to."
+    )
+
+
 def _shortfall_sentence(received: str, expected: str) -> str:
     """The underpayment, worded down to whatever is actually known.
 
@@ -467,6 +472,14 @@ def _summary(
             # facts. Money leads, per the product overview §5: the shortfall is
             # the thing being decided about, the provenance is why it is here.
             parts: list[str] = []
+            # The contradiction leads when there is one: it is *why* this
+            # decision is in front of a person, and the shortfall or the
+            # provenance below it is context for that, not a competing
+            # headline. (The two amount rules that lead with money, `R070` and
+            # `R065`, both outrank `R075`, so a decision reaching here with a
+            # contradiction really was routed by the contradiction.)
+            if ReasonCode.FIELD_CONTRADICTS_MATCH in reasons:
+                parts.append(_contradiction_sentence(decision))
             if ReasonCode.AMOUNT_UNDERPAID in reasons:
                 parts.append(_shortfall_sentence(received, expected))
             if ReasonCode.SOURCE_PARTIALLY_TRUSTED in reasons:

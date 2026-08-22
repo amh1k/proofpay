@@ -8,7 +8,13 @@ became wrong.
 
 import pytest
 
-from proofpay.core.compare.levels import Comparison, Level, always, else_level
+from proofpay.core.compare.levels import (
+    Agreement,
+    Comparison,
+    Level,
+    always,
+    else_level,
+)
 from proofpay.core.compare.name import (
     COMMON_NAME_TOKENS,
     SENDER_NAME,
@@ -75,8 +81,20 @@ def test_the_guides_ordering_would_be_rejected_by_the_constructor():
         Comparison(
             field="sender_name",
             levels=(
-                Level("NAME_MASK_OK", "Consistent with masked name", 0.85, lambda a, b, c: False),
-                Level("NAME_STRONG", "Strong match", 0.90, lambda a, b, c: False),
+                Level(
+                    "NAME_MASK_OK",
+                    "Consistent with masked name",
+                    0.85,
+                    lambda a, b, c: False,
+                    Agreement.AGREE,
+                ),
+                Level(
+                    "NAME_STRONG",
+                    "Strong match",
+                    0.90,
+                    lambda a, b, c: False,
+                    Agreement.AGREE,
+                ),
                 else_level("NAME_ELSE", "No name match"),
             ),
         )

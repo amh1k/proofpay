@@ -33,7 +33,13 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any, Final
 
-from proofpay.core.compare.levels import Comparison, FieldOutcome, Level, else_level
+from proofpay.core.compare.levels import (
+    Agreement,
+    Comparison,
+    FieldOutcome,
+    Level,
+    else_level,
+)
 from proofpay.core.normalize import normalize_reference, reference_confusable_key
 
 __all__ = [
@@ -121,18 +127,23 @@ REFERENCE: Final[Comparison] = Comparison(
             "Transaction ID matches exactly",
             1.00,
             lambda a, b, c: c["equal"],
+            Agreement.AGREE,
         ),
+        # A confusable reading is the same identifier, printed by a receipt
+        # that renders 0 and O alike. It agrees.
         Level(
             "REF_CONFUSABLE",
             "Transaction ID matches apart from easily misread characters",
             0.90,
             lambda a, b, c: c["confusable_equal"],
+            Agreement.AGREE,
         ),
         Level(
             "REF_SUFFIX",
             "Receipt shows only the last characters of this transaction ID",
             0.75,
             lambda a, b, c: c["is_suffix"],
+            Agreement.AGREE,
         ),
         # Containment elsewhere in the string, or a shared tail when *both*
         # sides are truncated differently. Weaker than a clean suffix because
@@ -143,14 +154,23 @@ REFERENCE: Final[Comparison] = Comparison(
             0.55,
             lambda a, b, c: c["contains"]
             or c["common_suffix_len"] >= c["t_min_partial_len"],
+            # Consistent, but the alignment itself is a guess: WEAK, not AGREE.
+            Agreement.WEAK,
         ),
         Level(
             "REF_MISSING",
             "No transaction ID to compare",
             0.00,
             lambda a, b, c: not c["both_present"],
+            Agreement.MISSING,
         ),
-        else_level("REF_ELSE", "Transaction IDs do not match"),
+        # Two readable ids that are not the same id: a contradiction, and one
+        # that must stop a verification rather than merely lower a score.
+        else_level(
+            "REF_ELSE",
+            "Transaction IDs do not match",
+            agreement=Agreement.CONTRADICT,
+        ),
     ),
 )
 

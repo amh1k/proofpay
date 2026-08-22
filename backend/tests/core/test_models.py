@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from proofpay.core.compare.levels import FieldOutcome
+from proofpay.core.compare.levels import Agreement, FieldOutcome
 from proofpay.core.models import (
     Allocation,
     Decision,
@@ -105,8 +105,20 @@ class TestScoredCandidate:
 
     def test_evidence_is_ordered_deterministically(self):
         outcomes = {
-            "timestamp": FieldOutcome(field="timestamp", level_code="TS_TIGHT", label="x", score=1.0),
-            "amount": FieldOutcome(field="amount", level_code="AMT_EXACT", label="y", score=1.0),
+            "timestamp": FieldOutcome(
+                field="timestamp",
+                level_code="TS_TIGHT",
+                label="x",
+                score=1.0,
+                agreement=Agreement.AGREE,
+            ),
+            "amount": FieldOutcome(
+                field="amount",
+                level_code="AMT_EXACT",
+                label="y",
+                score=1.0,
+                agreement=Agreement.AGREE,
+            ),
         }
         candidate = ScoredCandidate(txn=_txn(), score=1.0, outcomes=outcomes)
         assert [e.field for e in candidate.evidence] == ["amount", "timestamp"]
@@ -158,7 +170,13 @@ class TestDecision:
             self._decision(confidence=confidence)
 
     def test_evidence_by_field(self):
-        outcome = FieldOutcome(field="amount", level_code="AMT_EXACT", label="Exact", score=1.0)
+        outcome = FieldOutcome(
+            field="amount",
+            level_code="AMT_EXACT",
+            label="Exact",
+            score=1.0,
+            agreement=Agreement.AGREE,
+        )
         decision = self._decision(evidence=(outcome,))
         assert decision.evidence_by_field()["amount"] is outcome
 

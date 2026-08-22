@@ -101,6 +101,13 @@ class ReasonCode(StrEnum):
     CLAIM_DEFLATED = "CLAIM_DEFLATED"
 
     # Field disagreement
+    #: At least one field was readable on both sides and the two disagree —
+    #: `Agreement.CONTRADICT` on some `FieldOutcome` of the winning candidate.
+    #: Deliberately field-agnostic: which field it was is already on the
+    #: evidence rows, and a per-field code would have to be kept in step with
+    #: every comparison ever added. This is the code that blocks a verification
+    #: on a claim whose id, amount and time all agree but whose sender does not.
+    FIELD_CONTRADICTS_MATCH = "FIELD_CONTRADICTS_MATCH"
     NAME_MISMATCH = "NAME_MISMATCH"
     REFERENCE_MISMATCH = "REFERENCE_MISMATCH"
     TIMESTAMP_MISMATCH = "TIMESTAMP_MISMATCH"

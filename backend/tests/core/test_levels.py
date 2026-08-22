@@ -8,6 +8,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from proofpay.core.compare.levels import (
+    Agreement,
     Comparison,
     FieldOutcome,
     Level,
@@ -23,9 +24,9 @@ def _score_at_least(threshold: float):
     return lambda a, b, ctx: ctx["score"] >= threshold
 
 
-EXACT = Level("X_EXACT", "Exact match", 1.0, lambda a, b, ctx: a == b)
-STRONG = Level("X_STRONG", "Strong match", 0.9, _score_at_least(0.9))
-WEAK = Level("X_WEAK", "Weak match", 0.5, _score_at_least(0.5))
+EXACT = Level("X_EXACT", "Exact match", 1.0, lambda a, b, ctx: a == b, Agreement.AGREE)
+STRONG = Level("X_STRONG", "Strong match", 0.9, _score_at_least(0.9), Agreement.AGREE)
+WEAK = Level("X_WEAK", "Weak match", 0.5, _score_at_least(0.5), Agreement.WEAK)
 ELSE = else_level("X_ELSE", "No match")
 
 DEMO = Comparison(field="demo", levels=(EXACT, STRONG, WEAK, ELSE))
@@ -37,14 +38,59 @@ class TestLevel:
         assert EXACT.code == "X_EXACT"
         assert EXACT.label == "Exact match"
 
+    def test_a_level_must_declare_what_it_means(self):
+        """`agreement` has no default, so a rung cannot be added without
+        somebody deciding whether it supports the match or argues against it.
+
+        The rule table and the renderer both read that answer. If it could be
+        omitted they would each have to guess, and they would guess
+        differently - which is the drift this field exists to make impossible.
+        """
+        with pytest.raises(TypeError):
+            Level("X_NEW", "Undeclared", 0.5, always)  # type: ignore[call-arg]
+
+    def test_agreement_is_not_derived_from_the_score(self):
+        """Direction and strength are different questions, and at both ends of
+        a real ladder they disagree: a weakly scored level can still *agree*
+        (a name too common to identify anyone) and a mid-scored one can
+        contradict outright (an amount off by a factor of ten)."""
+        weak_agreement = Level("X_COMMON", "Common only", 0.20, always, Agreement.WEAK)
+        loud_conflict = Level(
+            "X_SCALED", "Off by ten", 0.35, always, Agreement.CONTRADICT
+        )
+        assert weak_agreement.score < loud_conflict.score
+        assert weak_agreement.agreement is Agreement.WEAK
+        assert loud_conflict.agreement is Agreement.CONTRADICT
+
+    @pytest.mark.parametrize(
+        "code,agreement",
+        [
+            ("X_MISSING", Agreement.AGREE),   # says MISSING, declares agreement
+            ("X_ELSE", Agreement.MISSING),    # declares MISSING, is not one
+        ],
+    )
+    def test_the_missing_suffix_and_the_missing_agreement_must_agree(
+        self, code, agreement
+    ):
+        """`FieldOutcome.is_missing` reads the `*_MISSING` suffix, and evidence
+        coverage in the aggregate keys off it, so the naming convention and the
+        declared meaning are one statement made twice. Tying them together at
+        construction is what stops them drifting apart."""
+        with pytest.raises(ValueError, match="_MISSING"):
+            Level(code, "Mismatched declaration", 0.0, always, agreement)
+
+    def test_a_missing_level_may_declare_missing(self):
+        level = Level("X_MISSING", "Not readable", 0.0, always, Agreement.MISSING)
+        assert level.agreement is Agreement.MISSING
+
     def test_empty_code_is_rejected(self):
         with pytest.raises(ValueError):
-            Level("", "no code", 1.0, always)
+            Level("", "no code", 1.0, always, Agreement.AGREE)
 
     @pytest.mark.parametrize("score", [-0.1, 1.1])
     def test_score_must_be_a_similarity(self, score):
         with pytest.raises(ValueError):
-            Level("X", "out of range", score, always)
+            Level("X", "out of range", score, always, Agreement.AGREE)
 
     def test_is_frozen(self):
         with pytest.raises(FrozenInstanceError):
@@ -62,7 +108,7 @@ class TestComparisonInvariants:
             Comparison(field="demo", levels=(WEAK, STRONG, ELSE))
 
     def test_equal_adjacent_scores_are_allowed(self):
-        twin = Level("X_TWIN", "Also strong", 0.9, _score_at_least(0.9))
+        twin = Level("X_TWIN", "Also strong", 0.9, _score_at_least(0.9), Agreement.AGREE)
         assert Comparison(field="demo", levels=(STRONG, twin, ELSE)).codes == (
             "X_STRONG",
             "X_TWIN",
@@ -70,7 +116,9 @@ class TestComparisonInvariants:
         )
 
     def test_duplicate_codes_rejected(self):
-        clone = Level("X_STRONG", "Different label, same code", 0.7, always)
+        clone = Level(
+            "X_STRONG", "Different label, same code", 0.7, always, Agreement.AGREE
+        )
         with pytest.raises(ValueError, match="duplicate level codes"):
             Comparison(field="demo", levels=(STRONG, clone))
 
@@ -82,7 +130,9 @@ class TestComparisonInvariants:
     def test_inline_true_lambda_is_not_accepted_as_an_else(self):
         # `lambda a, b, c: True` is total in fact but not checkable; the error
         # message points the author at `else_level` / `always`.
-        sneaky = Level("X_SNEAKY", "Catch all", 0.0, lambda a, b, ctx: True)
+        sneaky = Level(
+            "X_SNEAKY", "Catch all", 0.0, lambda a, b, ctx: True, Agreement.CONTRADICT
+        )
         with pytest.raises(ValueError, match="else_level"):
             Comparison(field="demo", levels=(EXACT, sneaky))
 
@@ -92,6 +142,23 @@ class TestComparisonInvariants:
 
     def test_default_weight_is_one(self):
         assert DEMO.weight == 1.0
+
+
+class TestElseLevel:
+    def test_an_else_contradicts_by_default(self):
+        """Both sides were readable - the ladder's `*_MISSING` rung has already
+        caught the unreadable case - and none of the agreeing rungs fired. That
+        is a disagreement.
+
+        It is also the fail-closed direction: an author who never thought about
+        their ELSE sends the decision to a human rather than quietly verifying
+        it.
+        """
+        assert ELSE.agreement is Agreement.CONTRADICT
+
+    def test_the_default_can_be_overridden_explicitly(self):
+        soft = else_level("Y_ELSE", "Nothing conclusive", agreement=Agreement.WEAK)
+        assert soft.agreement is Agreement.WEAK
 
 
 class TestEvaluate:
@@ -115,6 +182,13 @@ class TestEvaluate:
 
     def test_outcome_carries_the_label_for_the_ui(self):
         assert DEMO.evaluate("a", "b", {"score": 0.95}).label == "Strong match"
+
+    def test_outcome_carries_the_levels_declared_meaning(self):
+        """The engine reads outcomes, never levels, so the classification has
+        to travel with the row or the rule table cannot see it at all."""
+        assert DEMO.evaluate("a", "b", {"score": 0.95}).agreement is Agreement.AGREE
+        assert DEMO.evaluate("a", "b", {"score": 0.6}).agreement is Agreement.WEAK
+        assert DEMO.evaluate("a", "b", {"score": 0.0}).agreement is Agreement.CONTRADICT
 
     def test_detail_carries_the_raw_metrics(self):
         outcome = DEMO.evaluate("a", "b", {"score": 0.95, "pairs": [("a", "b")]})
@@ -154,23 +228,61 @@ class TestEvaluate:
 class TestFieldOutcome:
     def test_missing_is_detected_by_suffix_convention(self):
         missing = FieldOutcome(
-            field="sender_name", level_code="NAME_MISSING", label="Not readable", score=0.0
+            field="sender_name",
+            level_code="NAME_MISSING",
+            label="Not readable",
+            score=0.0,
+            agreement=Agreement.MISSING,
         )
         present = FieldOutcome(
-            field="sender_name", level_code="NAME_EXACT", label="Exact match", score=1.0
+            field="sender_name",
+            level_code="NAME_EXACT",
+            label="Exact match",
+            score=1.0,
+            agreement=Agreement.AGREE,
         )
         assert missing.is_missing is True
         assert present.is_missing is False
 
     def test_a_level_code_ending_in_else_is_not_missing(self):
         # "we looked and disagreed" is evidence; "we could not read it" is not.
-        outcome = FieldOutcome(field="x", level_code="NAME_ELSE", label="No match", score=0.0)
+        outcome = FieldOutcome(
+            field="x",
+            level_code="NAME_ELSE",
+            label="No match",
+            score=0.0,
+            agreement=Agreement.CONTRADICT,
+        )
         assert outcome.is_missing is False
+        assert outcome.contradicts is True
 
     def test_is_frozen(self):
-        outcome = FieldOutcome(field="x", level_code="X_ELSE", label="No match", score=0.0)
+        outcome = FieldOutcome(
+            field="x",
+            level_code="X_ELSE",
+            label="No match",
+            score=0.0,
+            agreement=Agreement.CONTRADICT,
+        )
         with pytest.raises(FrozenInstanceError):
             outcome.score = 1.0  # type: ignore[misc]
+
+    @pytest.mark.parametrize(
+        "agreement,expected",
+        [
+            (Agreement.AGREE, False),
+            (Agreement.WEAK, False),
+            (Agreement.CONTRADICT, True),
+            (Agreement.MISSING, False),   # absence of evidence is not disagreement
+        ],
+    )
+    def test_contradicts_is_exactly_the_contradict_member(self, agreement, expected):
+        """What the rule table reads. `MISSING` is the one worth stating: an
+        unread field must never be counted as a field that argues back."""
+        outcome = FieldOutcome(
+            field="x", level_code="X_Y", label="l", score=0.5, agreement=agreement
+        )
+        assert outcome.contradicts is expected
 
 
 def test_always_is_unconditional():

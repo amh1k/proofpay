@@ -43,7 +43,13 @@ from typing import Any
 
 from rapidfuzz.distance import JaroWinkler
 
-from proofpay.core.compare.levels import Comparison, FieldOutcome, Level, else_level
+from proofpay.core.compare.levels import (
+    Agreement,
+    Comparison,
+    FieldOutcome,
+    Level,
+    else_level,
+)
 from proofpay.core.normalize import (
     ACCOUNT_NOISE,
     COMMON_NAME_TOKENS,
@@ -526,6 +532,7 @@ _LEVELS: tuple[Level, ...] = (
             and a == b
             and c["idf_weighted_score"] >= c["t_common_idf"]
         ),
+        Agreement.AGREE,
     ),
     Level(
         "NAME_STRONG",
@@ -537,12 +544,14 @@ _LEVELS: tuple[Level, ...] = (
             and c["token_score"] >= c["t_strong"]
             and c["idf_weighted_score"] >= c["t_common_idf"]
         ),
+        Agreement.AGREE,
     ),
     Level(
         "NAME_MASK_OK",
         "Consistent with masked name",
         0.85,
         lambda a, b, c: c["mask_consistent"],
+        Agreement.AGREE,
     ),
     Level(
         "NAME_INITIALS",
@@ -551,6 +560,7 @@ _LEVELS: tuple[Level, ...] = (
         lambda a, b, c: (
             c["initials_compatible"] and c["token_score"] >= c["t_initials"]
         ),
+        Agreement.AGREE,
     ),
     Level(
         "NAME_PARTIAL",
@@ -559,6 +569,9 @@ _LEVELS: tuple[Level, ...] = (
         lambda a, b, c: (
             c["pair_count"] >= 1 and c["idf_weighted_score"] >= c["t_common_idf"]
         ),
+        # One distinctive component shared out of several: the names overlap,
+        # which is consistent, but a shared surname is not an identification.
+        Agreement.WEAK,
     ),
     Level(
         "NAME_COMMON_ONLY",
@@ -567,14 +580,23 @@ _LEVELS: tuple[Level, ...] = (
         lambda a, b, c: (
             c["pair_count"] >= 1 and c["idf_weighted_score"] < c["t_common_idf"]
         ),
+        # The names *agree* — on a name so common the agreement identifies
+        # nobody. Weak evidence for the match, never evidence against it, and
+        # the 0.20 score is what says how little it is worth.
+        Agreement.WEAK,
     ),
     Level(
         "NAME_MISSING",
         "Sender name not readable",
         0.00,
         lambda a, b, c: not c["both_present"],
+        Agreement.MISSING,
     ),
-    else_level("NAME_ELSE", "No name match"),
+    # Two readable names with nothing in common. This is the rung that must
+    # stop a verification: a claim agreeing on id, amount and time but naming a
+    # different sender is exactly the screen a merchant cannot be shown with a
+    # green tick on it.
+    else_level("NAME_ELSE", "No name match", agreement=Agreement.CONTRADICT),
 )
 
 

@@ -40,7 +40,7 @@ from proofpay.core.compare.amount import (
     compare_amounts,
 )
 from proofpay.core.compare.amount_match import AMOUNT_MATCH, compare_amount_match
-from proofpay.core.compare.levels import Comparison, FieldOutcome
+from proofpay.core.compare.levels import Agreement, Comparison, FieldOutcome
 from proofpay.core.compare.name import (
     build_name_idf,
     compare_name,
@@ -354,6 +354,30 @@ class Context:
         best = self.ranking.best
         return best.evidence if best is not None else ()
 
+    @property
+    def contradicting_fields(self) -> tuple[FieldOutcome, ...]:
+        """Winner's fields that were readable on both sides and disagree.
+
+        The direction is `Level.agreement`, declared beside the comparison rung
+        itself, so this reads the semantic classification rather than
+        re-deriving one from scores or from level codes spelled out here. A
+        field that could not be read is `Agreement.MISSING` and is deliberately
+        not in this tuple: absence of evidence is not evidence of mismatch.
+        """
+        return tuple(e for e in self.evidence if e.agreement is Agreement.CONTRADICT)
+
+    @property
+    def has_contradicting_field(self) -> bool:
+        """`R075`'s predicate: some field actively argues against this match.
+
+        A screen reading `✓ Transaction ID  ✓ Amount  ✓ Timestamp  ✗ Sender
+        name` above the words PAYMENT VERIFIED is self-contradictory, and a
+        merchant cannot act on it. The aggregate score cannot express this on
+        its own — three perfect fields carry a fourth that flatly disagrees over
+        `tau_accept` — so it is a rule, not a threshold.
+        """
+        return bool(self.contradicting_fields)
+
 
 def first_match(ctx: Context, rules: Sequence[Rule] = RULES) -> Rule:
     """First rule whose predicate holds. Position is precedence.
@@ -424,6 +448,19 @@ def _enforce_invariants(decision: Decision, ctx: Context) -> Decision:
         raise AssertionError(
             f"VERIFIED names {decision.matched_txn_id!r} but the winner is "
             f"{ctx.best.txn_id!r}"
+        )
+    # > A field that actively contradicts the match must block VERIFIED.
+    #
+    # `R075` is what implements that, and this is the backstop that says so
+    # whatever the table looks like tomorrow, exactly as the source check above
+    # backstops `R065`. A merchant shown PAYMENT VERIFIED above a red ✗ on the
+    # sender row has been handed a self-contradictory screen, and no reordering
+    # of the table is allowed to produce one.
+    contradicting = ctx.contradicting_fields
+    if contradicting:
+        raise AssertionError(
+            "VERIFIED with a contradicting field: "
+            + ", ".join(f"{e.field}={e.level_code}" for e in contradicting)
         )
     return decision
 

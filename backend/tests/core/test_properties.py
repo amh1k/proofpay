@@ -47,7 +47,7 @@ from hypothesis import strategies as st
 import proofpay.core.compare as compare_pkg
 from proofpay.core.compare.amount_match import compare_amount_match
 from proofpay.core.compare.decay import exponential, gauss
-from proofpay.core.compare.levels import Comparison, FieldOutcome, always
+from proofpay.core.compare.levels import Agreement, Comparison, FieldOutcome, always
 from proofpay.core.compare.name import (
     build_name_idf,
     compare_name,
@@ -75,6 +75,7 @@ from proofpay.core.normalize import normalize_name, parse_amount_money
 from proofpay.core.reasons import (
     TRUSTED_LEDGER_SOURCES,
     ObservationCode,
+    Risk,
     Status,
 )
 from proofpay.core.retrieval import TxnIndex
@@ -352,6 +353,48 @@ def test_verified_always_names_a_transaction_that_is_in_the_feed(claim, order, f
 
 @given(claim=claims, order=st.one_of(st.none(), orders), feed=feeds(max_size=5))
 @PROPERTY
+def test_no_verified_decision_ever_rests_on_a_contradicted_field(claim, order, feed):
+    """> A field that actively contradicts the match must block VERIFIED.
+
+    The blanket statement, over arbitrary claims and arbitrary feeds rather
+    than over the handful of situations somebody thought to write down. It was
+    unassertable before `Agreement` existed: "which levels mean the field
+    disagrees" lived only in the renderer, so a test at this layer would have
+    had to import presentation to say what a contradiction is - or hard-code a
+    second list of level codes and watch it drift.
+
+    Reaching VERIFIED with a red cross on a row is not a scoring near-miss to
+    be retuned. It is a screen that tells a shopkeeper two opposite things at
+    once, and no combination of inputs may produce one.
+    """
+    decision = decide(claim, order, feed, (), now=NOW, policy=POLICY)
+    if decision.status is not Status.VERIFIED:
+        return
+    contradicting = [e.level_code for e in decision.evidence if e.contradicts]
+    assert not contradicting, (
+        f"VERIFIED on evidence containing {contradicting}"
+    )
+
+
+@given(claim=claims, order=st.one_of(st.none(), orders), feed=feeds(max_size=5))
+@PROPERTY
+def test_a_contradicted_match_is_always_routed_to_a_human_or_worse(claim, order, feed):
+    """The other half: a contradiction never lands on a *reassuring* verdict.
+
+    VERIFIED is blocked by the rule above it, and the statuses that remain are
+    all ones that stop the merchant - review, unmatched, suspicious, duplicate.
+    Stated as a set rather than as "== NEEDS_REVIEW" because the safety
+    negative rules outrank `R075` on purpose and must keep doing so.
+    """
+    decision = decide(claim, order, feed, (), now=NOW, policy=POLICY)
+    if not any(e.contradicts for e in decision.evidence):
+        return
+    assert decision.status is not Status.VERIFIED
+    assert decision.risk in {Risk.MEDIUM, Risk.HIGH}
+
+
+@given(claim=claims, order=st.one_of(st.none(), orders), feed=feeds(max_size=5))
+@PROPERTY
 def test_a_decision_is_always_well_formed(claim, order, feed):
     """Whatever the input, the output is a complete, renderable audit row.
 
@@ -526,6 +569,42 @@ def test_every_ladder_ends_in_the_structural_else(name):
     comparison = ALL_COMPARISONS[name]
     assert comparison.levels[-1].predicate is always
     assert not any(lvl.predicate is always for lvl in comparison.levels[:-1])
+
+
+@pytest.mark.parametrize("name", sorted(ALL_COMPARISONS))
+def test_every_level_declares_which_way_its_evidence_points(name):
+    """Every rung of every discovered ladder carries an `Agreement`.
+
+    Discovered, not hand-listed: this is the check that covers a comparison
+    somebody adds next month. `Level.agreement` is a required field so the
+    construction cannot omit it, and this says the shipped ladders really do
+    satisfy that rather than trusting the dataclass in the abstract.
+
+    The `*_MISSING` pairing is asserted alongside because the two are one
+    statement made twice - `FieldOutcome.is_missing` reads the suffix, evidence
+    coverage in the aggregate reads `is_missing`, and the rule table reads the
+    agreement. If the two ever disagreed, an unreadable field would start
+    arguing against the candidate that could not be read.
+    """
+    for level in ALL_COMPARISONS[name].levels:
+        assert isinstance(level.agreement, Agreement), (
+            f"{name}: {level.code} declares no Agreement"
+        )
+        assert (level.agreement is Agreement.MISSING) == (
+            level.code.rsplit("_", 1)[-1] == "MISSING"
+        ), f"{name}: {level.code} declares {level.agreement}"
+
+
+@pytest.mark.parametrize("name", sorted(ALL_COMPARISONS))
+def test_every_ladder_can_actually_reach_a_contradiction(name):
+    """A ladder whose ELSE agrees would silently opt its field out of `R075`.
+
+    Each comparison's catch-all means "both sides were readable and none of the
+    agreeing rungs fired", which is a disagreement. If a ladder is ever written
+    whose last rung declares otherwise, the field it describes can never block
+    a verification, and nothing else in the suite would notice.
+    """
+    assert ALL_COMPARISONS[name].levels[-1].agreement is Agreement.CONTRADICT
 
 
 @pytest.mark.parametrize("name", sorted(ALL_COMPARISONS))
@@ -927,6 +1006,7 @@ def outcome_sets(draw: st.DrawFn) -> dict[str, FieldOutcome]:
             level_code=f"{prefix}_MISSING" if missing else f"{prefix}_TEST",
             label="generated",
             score=0.0 if missing else draw(field_scores),
+            agreement=Agreement.MISSING if missing else Agreement.AGREE,
         )
     return out
 
@@ -958,6 +1038,7 @@ def test_an_unreadable_field_never_argues_against_a_candidate(outcomes):
             level_code=o.level_code.replace("_MISSING", "_ELSE"),
             label=o.label,
             score=0.0,
+            agreement=Agreement.CONTRADICT,
         )
         if o.is_missing
         else o

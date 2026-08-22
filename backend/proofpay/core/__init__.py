@@ -16,7 +16,14 @@ have to reach into submodules: `decide` turns a claim plus a ledger into a
 `Decision`, and `explain` renders that `Decision` for a human.
 """
 
-from proofpay.core.compare.levels import Comparison, FieldOutcome, Level, always, else_level
+from proofpay.core.compare.levels import (
+    Agreement,
+    Comparison,
+    FieldOutcome,
+    Level,
+    always,
+    else_level,
+)
 from proofpay.core.decide import ENGINE_VERSION, RULESET_VERSION, DecisionPolicy, decide
 from proofpay.core.explain import Explanation, explain, render_text
 from proofpay.core.models import (
@@ -60,6 +67,7 @@ __all__ = [
     "RULESET_VERSION",
     "TRUSTED_LEDGER_SOURCES",
     "UTC",
+    "Agreement",
     "Allocation",
     "ClaimedInstant",
     "Comparison",

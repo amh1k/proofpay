@@ -36,7 +36,13 @@ from types import MappingProxyType
 from typing import Any, Final, Protocol
 
 from proofpay.core.compare.decay import gauss
-from proofpay.core.compare.levels import Comparison, FieldOutcome, Level, else_level
+from proofpay.core.compare.levels import (
+    Agreement,
+    Comparison,
+    FieldOutcome,
+    Level,
+    else_level,
+)
 from proofpay.core.reasons import ObservationCode
 from proofpay.core.timex import (
     ClaimedInstant,
@@ -241,12 +247,14 @@ TIMESTAMP: Final[Comparison] = Comparison(
             "Same time as the transaction",
             1.00,
             lambda a, b, c: c["precise"] and c["sim"] >= c["t_sim_tight"],
+            Agreement.AGREE,
         ),
         Level(
             "TS_CLOSE",
             "Within a few minutes of the transaction",
             0.85,
             lambda a, b, c: c["precise"] and c["sim"] >= c["t_sim_close"],
+            Agreement.AGREE,
         ),
         # An imprecise reading can be consistent, but never precise. Scored
         # below TS_CLOSE because "some time that day" is genuinely less
@@ -257,26 +265,39 @@ TIMESTAMP: Final[Comparison] = Comparison(
             "Consistent with the transaction, but the receipt fixed only the date",
             0.60,
             lambda a, b, c: c["sim"] >= c["t_sim_close"],
+            # Consistent with the transaction, but only to the day: it does not
+            # disagree, it simply pins nothing down.
+            Agreement.WEAK,
         ),
         Level(
             "TS_LOOSE",
             "Roughly the same time",
             0.50,
             lambda a, b, c: c["sim"] >= c["t_sim_loose"],
+            Agreement.WEAK,
         ),
         Level(
             "TS_HOUR_ART",
             "Differs by a whole number of hours",
             0.25,
             lambda a, b, c: c["hour_offset"] is not None,
+            # The classic AM/PM or time-zone artefact — worth a second look,
+            # not an accusation, and certainly not a fact that should on its
+            # own send an otherwise perfect match to a human.
+            Agreement.WEAK,
         ),
         Level(
             "TS_MISSING",
             "No usable time on the receipt",
             0.00,
             lambda a, b, c: c["delta_s"] is None,
+            Agreement.MISSING,
         ),
-        else_level("TS_ELSE", "Times do not correspond"),
+        else_level(
+            "TS_ELSE",
+            "Times do not correspond",
+            agreement=Agreement.CONTRADICT,
+        ),
     ),
 )
 

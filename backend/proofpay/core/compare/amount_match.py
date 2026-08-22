@@ -21,7 +21,13 @@ from types import MappingProxyType
 from typing import Any, Final
 
 from proofpay.core.compare.amount import is_power_of_ten_multiple
-from proofpay.core.compare.levels import Comparison, FieldOutcome, Level, else_level
+from proofpay.core.compare.levels import (
+    Agreement,
+    Comparison,
+    FieldOutcome,
+    Level,
+    else_level,
+)
 from proofpay.core.money import Money
 
 __all__ = [
@@ -84,6 +90,7 @@ AMOUNT_MATCH: Final[Comparison] = Comparison(
             "Amount matches the transaction exactly",
             1.00,
             lambda a, b, c: c["equal"],
+            Agreement.AGREE,
         ),
         # Unreachable while `amount_tolerance_minor` is 0, which is the MVP
         # position (exact equality in integer paisa). It exists so that a
@@ -94,23 +101,35 @@ AMOUNT_MATCH: Final[Comparison] = Comparison(
             "Amount matches within the permitted tolerance",
             0.90,
             lambda a, b, c: c["within_tolerance"],
+            Agreement.AGREE,
         ),
         # Deliberately low. It is enough to keep the candidate in play — the
         # amount comparison must not veto the transaction an attacker really
         # does hold — and nowhere near enough to carry a verification.
+        #
+        # And it CONTRADICTS. Rs 500 printed as Rs 5,000 is the signature edit
+        # this product exists to catch, so it is not a soft near-miss between
+        # AGREE and the plain mismatch: it points against the match at least as
+        # hard as AMT_ELSE does. The score says how much; this says which way.
         Level(
             "AMT_SCALED",
             "Amount differs by a factor of ten",
             0.35,
             lambda a, b, c: c["scaled"],
+            Agreement.CONTRADICT,
         ),
         Level(
             "AMT_MISSING",
             "No amount could be read from the receipt",
             0.00,
             lambda a, b, c: not c["both_present"],
+            Agreement.MISSING,
         ),
-        else_level("AMT_ELSE", "Amount does not match the transaction"),
+        else_level(
+            "AMT_ELSE",
+            "Amount does not match the transaction",
+            agreement=Agreement.CONTRADICT,
+        ),
     ),
 )
 
