@@ -1,0 +1,983 @@
+{
+  "version": "1.0.0",
+  "description": "ProofPay 30-case demo fixture manifest (single source of truth)",
+  "total_cases": 30,
+  "category_counts": {
+    "VERIFIED": 10,
+    "UNMATCHED": 4,
+    "SUSPICIOUS": 6,
+    "DUPLICATE": 4,
+    "NEEDS_REVIEW": 6
+  },
+  "cases": [
+    {
+      "id": "G01",
+      "title": "Exact match — Easypaisa wallet transfer",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "reference_id": "EP0000011",
+        "sender_name": "Bilal Ahmed Khan",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -11,
+        "raw_timestamp_text": "20 Aug 2026, 01:54 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "external_transaction_id": "EP0000011",
+        "sender_name": "Bilal Ahmed Khan",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -12,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G01",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G02",
+      "title": "Fuzzy sender match — Transliteration variant (Muhammad / Mohammad)",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 250000,
+        "reference_id": "JC0000022",
+        "sender_name": "Muhammad Usman Sheikh",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -20,
+        "raw_timestamp_text": "20 Aug 2026, 01:45 PM"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 250000,
+        "external_transaction_id": "JC0000022",
+        "sender_name": "Mohammad Usman Shaikh",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -21,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G02",
+        "expected_amount_paisa": 250000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "MATCH_WITH_FUZZY_SENDER",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G03",
+      "title": "Raast P2P transfer — exact match",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "raast",
+        "amount_paisa": 350000,
+        "reference_id": "RA0000033",
+        "sender_name": "Saad Tariq Qureshi",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -15,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "raast",
+        "amount_paisa": 350000,
+        "external_transaction_id": "RA0000033",
+        "sender_name": "Saad Tariq Qureshi",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -16,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G03",
+        "expected_amount_paisa": 350000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G04",
+      "title": "Bank IBFT transfer — exact match",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "bank",
+        "amount_paisa": 500000,
+        "reference_id": "BK0000044",
+        "sender_name": "Faisal Javed Malik",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -20,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "bank",
+        "amount_paisa": 500000,
+        "external_transaction_id": "BK0000044",
+        "sender_name": "Faisal Javed Malik",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -21,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G04",
+        "expected_amount_paisa": 500000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G05",
+      "title": "Overpayment accepted — paid 2,000 for 1,500 order",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 200000,
+        "reference_id": "EP0000055",
+        "sender_name": "Hassan Raza Shah",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -25,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 200000,
+        "external_transaction_id": "EP0000055",
+        "sender_name": "Hassan Raza Shah",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -26,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G05",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "OVERPAYMENT_ACCEPTED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G06",
+      "title": "Minor 5-min timestamp drift between receipt and ledger",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 180000,
+        "reference_id": "JC0000066",
+        "sender_name": "Hamza Imran Butt",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -30,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 180000,
+        "external_transaction_id": "JC0000066",
+        "sender_name": "Hamza Imran Butt",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -31,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G06",
+        "expected_amount_paisa": 180000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G07",
+      "title": "Initials match (M B Shaikh vs Muhammad Bilal Shaikh)",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "raast",
+        "amount_paisa": 420000,
+        "reference_id": "RA0000070",
+        "sender_name": "M B Shaikh",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -35,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "raast",
+        "amount_paisa": 420000,
+        "external_transaction_id": "RA0000070",
+        "sender_name": "Muhammad Bilal Shaikh",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -36,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G07",
+        "expected_amount_paisa": 420000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G08",
+      "title": "Whitespace and case variation in sender name",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "bank",
+        "amount_paisa": 300000,
+        "reference_id": "BK0000081",
+        "sender_name": "KASHIF ALTAF KHAN",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -40,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "bank",
+        "amount_paisa": 300000,
+        "external_transaction_id": "BK0000081",
+        "sender_name": "KASHIF ALTAF KHAN",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -41,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G08",
+        "expected_amount_paisa": 300000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G09",
+      "title": "Easypaisa store transfer — exact match",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 85000,
+        "reference_id": "EP0000092",
+        "sender_name": "Ayesha Fatima",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -45,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 85000,
+        "external_transaction_id": "EP0000092",
+        "sender_name": "Ayesha Fatima",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -46,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G09",
+        "expected_amount_paisa": 85000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "G10",
+      "title": "JazzCash merchant QR payment",
+      "category": "VERIFIED",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 120000,
+        "reference_id": "JC0000101",
+        "sender_name": "Omar Farooq",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -50,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 120000,
+        "external_transaction_id": "JC0000101",
+        "sender_name": "Omar Farooq",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -51,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-G10",
+        "expected_amount_paisa": 120000
+      },
+      "expected": {
+        "outcome": "VERIFIED",
+        "reason_code": "EXACT_MATCH",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "U01",
+      "title": "Non-existent transaction ID — fake screenshot ref",
+      "category": "UNMATCHED",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "reference_id": "EP99999999",
+        "sender_name": "Tariq Mahmood",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": null,
+      "order": {
+        "external_order_ref": "ORD-U01",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "UNMATCHED",
+        "reason_code": "NO_MATCHING_TRANSACTION",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "U02",
+      "title": "Pending settlement — payment in-flight, feed delayed",
+      "category": "UNMATCHED",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 200000,
+        "reference_id": "JC0000202",
+        "sender_name": "Asad Ullah",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -2,
+        "raw_timestamp_text": "20 Aug 2026, 02:03 PM"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 200000,
+        "external_transaction_id": "JC0000202",
+        "sender_name": "Asad Ullah",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -2,
+        "status": "PENDING",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-U02",
+        "expected_amount_paisa": 200000
+      },
+      "expected": {
+        "outcome": "UNMATCHED",
+        "reason_code": "TRANSACTION_PENDING_SETTLEMENT",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "U03",
+      "title": "Feed window expired — transfer occurred 5 days ago",
+      "category": "UNMATCHED",
+      "visible": {
+        "rail": "raast",
+        "amount_paisa": 150000,
+        "reference_id": "RA0000213",
+        "sender_name": "Kamran Akmal",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -7200,
+        "raw_timestamp_text": "15 Aug 2026, 02:05 PM"
+      },
+      "ledger": null,
+      "order": {
+        "external_order_ref": "ORD-U03",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "UNMATCHED",
+        "reason_code": "TRANSACTION_OUTSIDE_WINDOW",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "U04",
+      "title": "Wrong receiver account — money sent to wrong merchant",
+      "category": "UNMATCHED",
+      "visible": {
+        "rail": "bank",
+        "amount_paisa": 300000,
+        "reference_id": "BK0000224",
+        "sender_name": "Zubair Ahmed",
+        "receiver_name": "Other Shop Electronics",
+        "claimed_offset_min": -15,
+        "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
+      },
+      "ledger": null,
+      "order": {
+        "external_order_ref": "ORD-U04",
+        "expected_amount_paisa": 300000
+      },
+      "expected": {
+        "outcome": "UNMATCHED",
+        "reason_code": "MISMATCHED_RECEIVER",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "S01",
+      "title": "Claimed amount inflated — receipt edited from Rs 500 to Rs 5,000",
+      "category": "SUSPICIOUS",
+      "tamper_type": "amount_edit",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 500000,
+        "reference_id": "EP0000303",
+        "sender_name": "Shoaib Malik",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 50000,
+        "external_transaction_id": "EP0000303",
+        "sender_name": "Shoaib Malik",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-S01",
+        "expected_amount_paisa": 500000
+      },
+      "expected": {
+        "outcome": "SUSPICIOUS",
+        "reason_code": "CLAIMED_AMOUNT_INFLATED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "S02",
+      "title": "Altered transaction ref — last digits edited in screenshot",
+      "category": "SUSPICIOUS",
+      "tamper_type": "ref_edit",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 150000,
+        "reference_id": "JC0000319",
+        "sender_name": "Waseem Akram",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -15,
+        "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 150000,
+        "external_transaction_id": "JC0000311",
+        "sender_name": "Waseem Akram",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -16,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-S02",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "SUSPICIOUS",
+        "reason_code": "REFERENCE_ID_TAMPERED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "S03",
+      "title": "Timestamp edited — date changed to match today's order",
+      "category": "SUSPICIOUS",
+      "tamper_type": "date_edit",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 400000,
+        "reference_id": "EPS03999",
+        "sender_name": "Rizwan Ahmed",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 200000,
+        "external_transaction_id": "EPS03999",
+        "sender_name": "Rizwan Ahmed",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-S03",
+        "expected_amount_paisa": 400000
+      },
+      "expected": {
+        "outcome": "SUSPICIOUS",
+        "reason_code": "CRITICAL_FIELD_CONFLICT",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "S04",
+      "title": "Sender name replaced — someone else's receipt edited",
+      "category": "SUSPICIOUS",
+      "tamper_type": "name_edit",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 300000,
+        "reference_id": "EPS04999",
+        "sender_name": "Adeel Chaudhry",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "external_transaction_id": "EPS04999",
+        "sender_name": "Adeel Chaudhry",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-S04",
+        "expected_amount_paisa": 300000
+      },
+      "expected": {
+        "outcome": "SUSPICIOUS",
+        "reason_code": "CRITICAL_FIELD_CONFLICT",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "S05",
+      "title": "Fabricated receipt — entirely generated fake image",
+      "category": "SUSPICIOUS",
+      "tamper_type": "fabricated",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 700000,
+        "reference_id": "EPS05999",
+        "sender_name": "Fake Customer",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 350000,
+        "external_transaction_id": "EPS05999",
+        "sender_name": "Fake Customer",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-S05",
+        "expected_amount_paisa": 700000
+      },
+      "expected": {
+        "outcome": "SUSPICIOUS",
+        "reason_code": "CRITICAL_FIELD_CONFLICT",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "S06",
+      "title": "Careful edit with no forensic trace — caught by ledger alone",
+      "category": "SUSPICIOUS",
+      "tamper_type": "careful_edit",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 360000,
+        "reference_id": "EPS06999",
+        "sender_name": "Naveed Iqbal",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 180000,
+        "external_transaction_id": "EPS06999",
+        "sender_name": "Naveed Iqbal",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-S06",
+        "expected_amount_paisa": 360000
+      },
+      "expected": {
+        "outcome": "SUSPICIOUS",
+        "reason_code": "CRITICAL_FIELD_CONFLICT",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "D01",
+      "title": "Transaction already consumed — assigned to previous order",
+      "category": "DUPLICATE",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "reference_id": "EP0000011",
+        "sender_name": "Bilal Ahmed Khan",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -11,
+        "raw_timestamp_text": "20 Aug 2026, 01:54 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "external_transaction_id": "EP0000011",
+        "sender_name": "Bilal Ahmed Khan",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -12,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-D01",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "DUPLICATE",
+        "reason_code": "TRANSACTION_ALREADY_ALLOCATED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "D02",
+      "title": "Exact SHA-256 screenshot reuse — identical image submitted twice",
+      "category": "DUPLICATE",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 250000,
+        "reference_id": "JC0000022",
+        "sender_name": "Muhammad Usman Sheikh",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -20,
+        "raw_timestamp_text": "20 Aug 2026, 01:45 PM"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 250000,
+        "external_transaction_id": "JC0000022",
+        "sender_name": "Muhammad Usman Sheikh",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -21,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-D02",
+        "expected_amount_paisa": 250000
+      },
+      "expected": {
+        "outcome": "DUPLICATE",
+        "reason_code": "PROOF_IMAGE_SHA256_REUSED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "D03",
+      "title": "Perceptual pHash screenshot reuse — cropped variant of previous proof",
+      "category": "DUPLICATE",
+      "visible": {
+        "rail": "raast",
+        "amount_paisa": 350000,
+        "reference_id": "RA0000033",
+        "sender_name": "Saad Tariq Qureshi",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -15,
+        "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
+      },
+      "ledger": {
+        "rail": "raast",
+        "amount_paisa": 350000,
+        "external_transaction_id": "RA0000033",
+        "sender_name": "Saad Tariq Qureshi",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -16,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-D03",
+        "expected_amount_paisa": 350000
+      },
+      "expected": {
+        "outcome": "DUPLICATE",
+        "reason_code": "PROOF_IMAGE_PHASH_SIMILAR",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "D04",
+      "title": "Cross-order double claim — rider re-submitting proof from Order #1",
+      "category": "DUPLICATE",
+      "visible": {
+        "rail": "bank",
+        "amount_paisa": 500000,
+        "reference_id": "BK0000044",
+        "sender_name": "Faisal Javed Malik",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -20,
+        "raw_timestamp_text": "20 Aug 2026, 01:45 PM"
+      },
+      "ledger": {
+        "rail": "bank",
+        "amount_paisa": 500000,
+        "external_transaction_id": "BK0000044",
+        "sender_name": "Faisal Javed Malik",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -21,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-D04",
+        "expected_amount_paisa": 500000
+      },
+      "expected": {
+        "outcome": "DUPLICATE",
+        "reason_code": "TRANSACTION_ALREADY_ALLOCATED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "N01",
+      "title": "Underpaid order — paid Rs 1,200 for Rs 1,500 order",
+      "category": "NEEDS_REVIEW",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 120000,
+        "reference_id": "EP0000505",
+        "sender_name": "Waqar Younis",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 120000,
+        "external_transaction_id": "EP0000505",
+        "sender_name": "Waqar Younis",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-N01",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "NEEDS_REVIEW",
+        "reason_code": "UNDERPAID_ORDER",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "N02",
+      "title": "Overpaid order requires manager review — paid Rs 5,000 for Rs 1,500 order",
+      "category": "NEEDS_REVIEW",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 500000,
+        "reference_id": "JC0000516",
+        "sender_name": "Junaid Jamshed",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -12,
+        "raw_timestamp_text": "20 Aug 2026, 01:53 PM"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 500000,
+        "external_transaction_id": "JC0000516",
+        "sender_name": "Junaid Jamshed",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -13,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-N02",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "NEEDS_REVIEW",
+        "reason_code": "OVERPAYMENT_REVIEW_REQUIRED",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "N03",
+      "title": "Ambiguous candidates — two identical PKR 1,500 transfers at same minute",
+      "category": "NEEDS_REVIEW",
+      "visible": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "reference_id": null,
+        "sender_name": "Irfan Khan",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -15,
+        "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
+      },
+      "ledger": {
+        "rail": "easypaisa",
+        "amount_paisa": 150000,
+        "external_transaction_id": "EP0000520",
+        "sender_name": "Irfan Khan",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -15,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-N03",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "NEEDS_REVIEW",
+        "reason_code": "AMBIGUOUS_CANDIDATES",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "N04",
+      "title": "Low OCR extraction confidence — image blurry",
+      "category": "NEEDS_REVIEW",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 150000,
+        "reference_id": "JC0000542",
+        "sender_name": "Arslan Ash",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 150000,
+        "external_transaction_id": "JC0000542",
+        "sender_name": "Arslan Ash",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-N04",
+        "expected_amount_paisa": 150000
+      },
+      "expected": {
+        "outcome": "NEEDS_REVIEW",
+        "reason_code": "INCOMPLETE_CLAIM_DATA",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "N05",
+      "title": "Missing timestamp on receipt screenshot",
+      "category": "NEEDS_REVIEW",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 250000,
+        "reference_id": "JC0000553",
+        "sender_name": "Danish Taimoor",
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": null
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 250000,
+        "external_transaction_id": "JC0000553",
+        "sender_name": "Danish Taimoor",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-N05",
+        "expected_amount_paisa": 250000
+      },
+      "expected": {
+        "outcome": "NEEDS_REVIEW",
+        "reason_code": "INCOMPLETE_CLAIM_DATA",
+        "rules_version": "v1.0.0"
+      }
+    },
+    {
+      "id": "N06",
+      "title": "Cropped receipt — sender name cut off",
+      "category": "NEEDS_REVIEW",
+      "visible": {
+        "rail": "jazzcash",
+        "amount_paisa": 180000,
+        "reference_id": "JC0000564",
+        "sender_name": null,
+        "receiver_name": "Ali Traders",
+        "claimed_offset_min": -10,
+        "raw_timestamp_text": "20 Aug 2026"
+      },
+      "ledger": {
+        "rail": "jazzcash",
+        "amount_paisa": 180000,
+        "external_transaction_id": "JC0000564",
+        "sender_name": "Shahid Afridi",
+        "receiver_name": "Ali Traders",
+        "ledger_offset_min": -11,
+        "status": "POSTED",
+        "trust_level": "DEMO_TRUSTED"
+      },
+      "order": {
+        "external_order_ref": "ORD-N06",
+        "expected_amount_paisa": 180000
+      },
+      "expected": {
+        "outcome": "NEEDS_REVIEW",
+        "reason_code": "INCOMPLETE_CLAIM_DATA",
+        "rules_version": "v1.0.0"
+      }
+    }
+  ]
+}
