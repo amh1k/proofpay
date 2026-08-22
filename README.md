@@ -61,6 +61,7 @@ itself. No `.env`, no database server, no cloud account, no API key. Full detail
 |---|---|
 | [`build-plan.md`](docs/build-plan.md) | The seven phases, in order, with a definition of done for each |
 | [`work-division.md`](docs/work-division.md) | Who owns which directories, so four people can work at once without colliding |
+| [`using-the-engine.md`](docs/using-the-engine.md) | How to call the verification engine and what it returns — for tracks B, C and D |
 | [`SETUP.md`](docs/setup.md) | Local setup, dependency rules, platform notes |
 | [`PRACTICES.md`](docs/practices.md) | Environments, git workflow, testing strategy, licensing, execution discipline |
 | [`REFERENCES.md`](docs/references.md) | 68 verified reference repositories, with what specifically to take from each |

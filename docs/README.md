@@ -14,6 +14,7 @@
 |---|---|
 | [Build plan](build-plan.md) | The seven phases, in order, with a definition of done for each |
 | [Work division](work-division.md) | Who owns which directories, so four people can work at once without colliding |
+| [Using the engine](using-the-engine.md) | How to call the verification engine and what it returns — for tracks B, C and D |
 | [Setup](setup.md) | Local setup, dependency rules, platform notes |
 | [Practices](practices.md) | Environments, git workflow, testing strategy, licensing, execution discipline |
 | [References](references.md) | 68 verified reference repositories, with what specifically to take from each |
