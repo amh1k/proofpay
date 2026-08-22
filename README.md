@@ -21,7 +21,7 @@ See the [project overview](docs/overview.md) for the full concept, features and 
 2. [`BUILD_PLAN.md`](docs/build-plan.md) — the seven phases and what "done" means for each
 3. [`SETUP.md`](docs/setup.md) — get it running on your machine
 
-**About to start coding?** Read [`PRACTICES.md`](docs/practices.md) first — git workflow, testing
+**About to start coding?** Read [`work-division.md`](docs/work-division.md) to find your track, then [`practices.md`](docs/practices.md) — git workflow, testing
 strategy, and the licence rules. Then read the guide for your phase in
 [`docs/phases/`](docs/phases/) immediately before you start that phase.
 
@@ -59,7 +59,8 @@ itself. No `.env`, no database server, no cloud account, no API key. Full detail
 
 | Document | Contents |
 |---|---|
-| [`BUILD_PLAN.md`](docs/build-plan.md) | The seven phases, in order, with a definition of done for each |
+| [`build-plan.md`](docs/build-plan.md) | The seven phases, in order, with a definition of done for each |
+| [`work-division.md`](docs/work-division.md) | Who owns which directories, so four people can work at once without colliding |
 | [`SETUP.md`](docs/setup.md) | Local setup, dependency rules, platform notes |
 | [`PRACTICES.md`](docs/practices.md) | Environments, git workflow, testing strategy, licensing, execution discipline |
 | [`REFERENCES.md`](docs/references.md) | 68 verified reference repositories, with what specifically to take from each |
