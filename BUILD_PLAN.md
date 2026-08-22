@@ -30,13 +30,14 @@ The build order is driven by three facts about a hackathon:
 
 | Layer | Choice | Note |
 |---|---|---|
-| Backend | Python 3.10+, FastAPI | Per system_design.md §19 |
+| Backend | Python 3.12, FastAPI | Per system_design.md §19 |
 | ORM / schema | SQLAlchemy 2.x + Alembic | Models follow data-model.md |
 | Database | SQLite (dev) -> PostgreSQL / ApsaraDB RDS | Same SQLAlchemy models both ways |
 | Object storage | Local filesystem adapter -> Alibaba OSS | Adapter interface, per §6.9 |
 | Receipt AI | Qwen-VL (DashScope) + deterministic fallback | Alibaba-native vision model |
 | Frontend | React + Vite + Tailwind | Per system_design.md §19 |
 | Tests | pytest | Rule and matching tests are the safety net |
+| Tooling | uv (packaging + Python version) | Universal cross-platform lockfile |
 
 **Alibaba Cloud alignment.** The design documents are deliberately
 vendor-neutral. For this hackathon the neutral slots are filled with Alibaba

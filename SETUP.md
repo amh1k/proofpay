@@ -2,99 +2,141 @@
 
 ## Do we all need identical versions?
 
-**No for the interpreter. Yes for the dependencies.**
+**Interpreter: same minor version. Packages: exactly identical.**
 
 | Thing | Must match? | Why |
 |---|---|---|
-| Python **interpreter** (3.10.x / 3.11.x / 3.12.x) | No — 3.10+ is enough | The code uses no version-specific behaviour. Patch versions never matter. |
-| Python **packages** | **Yes — pinned exactly** | This is where "works on my machine" actually comes from. |
-| Node **runtime** | No — 20 LTS or newer | |
-| Node **packages** | **Yes — via lockfile** | Same reason. |
-| Operating system | No | Adapters keep paths and storage portable. |
+| Python **minor** version (3.12) | Yes | 3.12 vs 3.13 differ in stdlib behaviour and, more often, in **wheel availability** — a package with no wheel for your version compiles from source, which on Windows means installing Visual C++ Build Tools and losing an hour. |
+| Python **patch** version (3.12.4 vs 3.12.14) | No | Never matters. |
+| Python **packages** | **Yes, exactly, including transitive ones** | This is where "works on my machine" actually comes from. |
+| Node **major** version (22 LTS) | Yes | Same wheel-style reasoning for native modules. |
+| Operating system | No | The lockfile is cross-platform and adapters keep storage portable. |
 
-The failure mode teams hit is never "you have Python 3.11 and I have 3.10". It is that one person
-installed FastAPI 0.141 and another got 0.115 a week later, an argument was renamed in between, and
-the app now crashes only on one machine — usually the machine doing the demo.
+**You do not have to manage the Python version yourself.** `uv` reads `.python-version`,
+downloads CPython 3.12 if the machine doesn't have it, and builds the virtualenv from it. A
+teammate with only Python 3.10 installed gets a correct 3.12 environment without noticing.
 
-So: **pin the packages, relax about the interpreter.**
+The failure mode teams actually hit is not the interpreter. It is that you installed `pydantic`
+2.13 on Tuesday, a teammate installed 2.15 on Thursday, a validator behaves differently, and the
+app now misbehaves on exactly one laptop — usually the one running the demo. And it is almost
+never a direct dependency; it is something three levels down that nobody typed.
 
-Dependency versions are frozen in [`backend/requirements.lock.txt`](backend/requirements.lock.txt).
-Everyone installs from that file, so all four machines get byte-identical packages.
+So: **pin every transitive dependency in a committed lockfile, and let the patch version float.**
 
 `pyproject.toml` declares what we *depend on* (loose ranges, for humans).
-`requirements.lock.txt` declares what we *install* (exact pins, for machines).
-Both are committed. Never install a package ad hoc — add it to `pyproject.toml`, then regenerate the lock.
+`uv.lock` declares what actually *gets installed* (exact pins with hashes, for machines).
+Both are committed. `uv.lock` is **universal** — one file resolved for Windows, macOS and Linux
+together, so all four machines get the same versions from the same lock.
 
 ---
 
-## Backend setup
+## First-time setup
 
-Requires Python **3.10 or newer** (`python --version` to check).
+### 1. Install uv (once per machine)
 
 **Windows (PowerShell):**
 
 ```powershell
-cd backend
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -r requirements.lock.txt
-pip install -e ".[dev]" --no-deps
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 **macOS / Linux:**
 
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.lock.txt
-pip install -e ".[dev]" --no-deps
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-`--no-deps` on the second command matters: it installs ProofPay itself as an editable package
-without letting pip re-resolve and drift away from the locked versions.
+If you would rather not run an install script, `pip install uv` works too.
 
-### Verify the install
+uv replaces pip, virtualenv, pyenv and pip-tools with one binary. Nothing else needs installing —
+not even Python.
+
+### 2. Set up the backend
 
 ```bash
-pytest
-uvicorn proofpay.main:app --reload
+cd backend
+uv sync
 ```
 
-Then open <http://127.0.0.1:8000/health> — you should see `{"status":"ok", ...}`
-and <http://127.0.0.1:8000/docs> for the interactive API.
+That is the whole setup. It creates `.venv`, fetches Python 3.12 if needed, and installs the exact
+locked versions.
 
-### Configuration
+### 3. Check it works
 
-No `.env` file is required. Every setting has a working default, so a fresh clone runs immediately.
+```bash
+uv run pytest
+uv run uvicorn proofpay.main:app --reload
+```
 
-To override anything, copy `.env.example` to `.env`. `.env` is gitignored —
-**never commit real credentials**, and never paste an API key into a chat or a commit.
+Open <http://127.0.0.1:8000/health> — expect `{"status":"ok", ...}`.
+Interactive API docs are at <http://127.0.0.1:8000/docs>.
+
+> Use `127.0.0.1`, not `localhost`. On some Windows setups `localhost` resolves to IPv6 `::1`
+> while uvicorn binds IPv4, producing a connection-refused that looks like a code bug.
+
+---
+
+## Every time you pull
+
+```bash
+cd backend
+uv sync --frozen
+```
+
+`--frozen` installs the lockfile exactly and **fails loudly** if `pyproject.toml` and `uv.lock`
+disagree. That turns "someone forgot to commit the lock" into an obvious error instead of a
+mystery bug at 2am.
 
 ---
 
 ## Adding a dependency
 
-Do not run a bare `pip install <package>`; it will work for you and break for everyone else.
+**Nobody runs a bare `pip install`.** It works for you and breaks for everyone else.
 
-1. Add the package to `dependencies` in `backend/pyproject.toml`.
-2. Reinstall and regenerate the lock:
+```bash
+uv add rapidfuzz          # runtime dependency
+uv add --dev pytest-cov   # development-only
+```
 
-   ```bash
-   pip install -e ".[dev]"
-   pip freeze --exclude-editable > requirements.lock.txt
-   ```
+This updates `pyproject.toml` and `uv.lock` together. Commit **both**, and mention it in the PR so
+teammates know to re-run `uv sync`.
 
-3. Commit **both** files together, and say so in the PR — everyone else then reruns
-   `pip install -r requirements.lock.txt`.
+**Check the licence before adding, not after.** MIT / BSD / Apache-2.0 / ISC are fine. Avoid
+GPL and especially **AGPL** — AGPL's copyleft triggers on *network* use, so deploying a demo URL
+containing AGPL code would oblige us to release all of ProofPay under AGPL. Two live traps in this
+problem space:
+
+- **`PyMuPDF` / `fitz` is AGPL-3.0.** Tempting for receipt handling. Use `pypdfium2` or Pillow.
+- **`fuzzywuzzy` / `python-Levenshtein` are GPL.** We use `rapidfuzz` (MIT), which needs no helper.
+
+---
+
+## Configuration
+
+No `.env` file is required. Every setting has a working default, so a fresh clone runs immediately
+with SQLite, local file storage, and the offline extractor — no cloud account, no API key.
+
+To override anything, copy `.env.example` to `.env`. `.env` is gitignored.
+**Never commit a real credential**, and never paste an API key into a chat or a PR.
+
+---
+
+## Local data
+
+`*.db` is gitignored, and seeded data is produced by a script — never by hand.
+
+This matters more than it sounds. The classic hackathon failure is that the demo only works on one
+laptop because that person hand-inserted a row weeks ago and forgot. If the seed script is the only
+way anyone gets data, the demo is reproducible on any machine.
 
 ---
 
 ## Platform notes
 
-- **Line endings.** `.gitattributes` normalises everything to LF in the repository, so Windows and
-  macOS contributors will not produce whole-file diffs against each other.
-- **Windows wheels.** `bcrypt` and `Pillow` ship prebuilt wheels for Windows, so no C compiler is
-  needed. If a build is ever attempted from source, upgrade pip first: `python -m pip install -U pip`.
-- **Database.** Development uses SQLite, which needs no server. The same SQLAlchemy models run
-  against PostgreSQL / ApsaraDB RDS in deployment; only `PROOFPAY_DATABASE_URL` changes.
+- **Line endings.** `.gitattributes` normalises to LF in the repository, so Windows and macOS
+  contributors don't produce whole-file diffs against each other.
+- **Native builds.** `bcrypt` and `Pillow` ship prebuilt wheels for Python 3.12 on all three
+  platforms, so no C compiler is needed. This is the practical reason we pin 3.12 rather than
+  chasing the newest release.
+- **Database.** Development uses SQLite, which needs no server and no account. The same SQLAlchemy
+  models run against PostgreSQL in deployment; only `PROOFPAY_DATABASE_URL` changes.
