@@ -1,0 +1,809 @@
+# ProofPay verification engine - the hand-labelled scenario table.
+#
+# This is the labelled dataset (guide section 8.2): small, hand-made, and
+# written down *before* the thresholds were fitted to it. It is the thing a
+# threshold sweep sweeps against, and the thing a rule reordering has to
+# answer to.
+#
+# Every scenario is a complete, absolute situation. There is no relative time
+# anywhere: `now` is pinned to the demo anchor 2026-08-20T14:05:00+05:00 and
+# every transaction and receipt carries a fixed instant, so a run in 2027
+# produces byte-identical decisions.
+#
+# Conventions
+# -----------
+# * Money is written as a major-unit decimal *string* ("2000.00"). It is
+#   parsed through `Money.from_major`, never through a float.
+# * `occurred_at.local` on a claim is the wall clock **as printed on the
+#   receipt**, read in Asia/Karachi - which is exactly what an OCR pass hands
+#   the engine. Ledger `occurred_at` is a real absolute instant, offset and all.
+# * `granularity_s` is how precisely the receipt pinned the time down: 60 for
+#   `13:52`, 1 for `13:52:04`, 86400 for a receipt that showed only a date.
+# * Omitting `merchant_id` means the shared demo merchant. Omitting a claim
+#   field means the receipt did not carry it (unreadable / not printed), which
+#   is a different thing from carrying it wrongly and is scored differently.
+# * `expected_rule` is asserted alongside `expected_status`. That is what
+#   catches "right answer, wrong reason": two rules can both say NEEDS_REVIEW
+#   for entirely different causes, and a table that quietly starts firing the
+#   other one is a regression even while the status column stays green.
+# * `expected_reasons` and `expected_observations` are asserted as *subsets*.
+#   Adding a code to an existing outcome is an enrichment; dropping one that a
+#   merchant was shown is a breaking change.
+
+merchant_id: "M-KARACHI-01"
+now: "2026-08-20T14:05:00+05:00"
+
+scenarios:
+
+  # ------------------------------------------------------------------
+  # The four canonical demo cases (overview.md section 8). These four are
+  # what gets shown on stage; if any of them moves, the demo script is wrong.
+  # ------------------------------------------------------------------
+
+  - name: demo-1-genuine-payment
+    about: >
+      Rs 2,000 ordered, Rs 2,000 sent, transaction id printed and readable.
+      The boring case, and the one that has to be effortless.
+    order: {order_id: "ORD-2201", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1001", external_id: "EP48219307", amount: "2000.00",
+         occurred_at: "2026-08-20T13:52:00+05:00", sender_name: "Zulqarnain Haider",
+         provider: "easypaisa"}
+    claim:
+      amount: "2000.00"
+      reference_id: "EP48219307"
+      sender_name: "Zulqarnain Haider"
+      provider: "easypaisa"
+      occurred_at: {local: "2026-08-20T13:52:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT, CLAIM_CONSISTENT]
+    expected_matched_txn_id: "TX1001"
+
+  - name: demo-2-edited-screenshot-claims-5000
+    about: >
+      The receipt says Rs 5,000. Rs 500 arrived. The transaction is real and
+      the customer really made it - one digit was added to the image - so the
+      engine must accuse the *screenshot*, not fail to find the payment.
+    order: {order_id: "ORD-2202", expected: "5000.00"}
+    ledger:
+      - {txn_id: "TX1002", external_id: "JC77410265", amount: "500.00",
+         occurred_at: "2026-08-20T13:47:00+05:00", sender_name: "Farhat Kanwal",
+         provider: "jazzcash"}
+    claim:
+      amount: "5000.00"
+      reference_id: "JC77410265"
+      sender_name: "Farhat Kanwal"
+      provider: "jazzcash"
+      occurred_at: {local: "2026-08-20T13:47:00", granularity_s: 60}
+    expected_status: SUSPICIOUS
+    expected_rule: R030
+    expected_reasons: [CLAIM_INFLATED, AMOUNT_UNDERPAID]
+
+  - name: demo-3-transaction-already-used
+    about: >
+      TX1003 exists, is genuine, and matches perfectly - but it was already
+      allocated to order ORD-0041. Re-sending yesterday's receipt is the
+      cheapest fraud there is, so DUPLICATE outranks every positive rule.
+    order: {order_id: "ORD-2203", expected: "3500.00"}
+    ledger:
+      - {txn_id: "TX1003", external_id: "EP93052184", amount: "3500.00",
+         occurred_at: "2026-08-20T13:31:00+05:00", sender_name: "Sanaullah Bhatti",
+         provider: "easypaisa"}
+    allocations:
+      - {txn_id: "TX1003", order_id: "ORD-0041"}
+    claim:
+      amount: "3500.00"
+      reference_id: "EP93052184"
+      sender_name: "Sanaullah Bhatti"
+      occurred_at: {local: "2026-08-20T13:31:00", granularity_s: 60}
+    expected_status: DUPLICATE
+    expected_rule: R020
+    expected_reasons: [TXN_ALREADY_ALLOCATED]
+
+  - name: demo-4-two-equal-candidates
+    about: >
+      Two Rs 250 payments from the same customer, eleven minutes apart, and a
+      receipt with no transaction id on it. Both transactions fit. Picking one
+      allocates the wrong money half the time, so the engine refuses to pick.
+
+      The four unrelated payments are load-bearing, not scenery. Inverse
+      document frequency is computed over the feed it is given, so a feed
+      containing nothing but the twins makes `Bilquis Tanveer` look like the
+      commonest name in the merchant's book and drops the match to
+      NAME_COMMON_ONLY. A real shop's afternoon has other customers in it, and
+      a fixture that pretends otherwise tests arithmetic nobody will meet.
+    order: {order_id: "ORD-2204", expected: "250.00"}
+    ledger:
+      - {txn_id: "TX1004", external_id: "EP10038871", amount: "250.00",
+         occurred_at: "2026-08-20T13:40:00+05:00", sender_name: "Bilquis Tanveer"}
+      - {txn_id: "TX1005", external_id: "EP10038994", amount: "250.00",
+         occurred_at: "2026-08-20T13:51:00+05:00", sender_name: "Bilquis Tanveer"}
+      - {txn_id: "TX0991", external_id: "EP10037012", amount: "1340.00",
+         occurred_at: "2026-08-20T13:19:00+05:00", sender_name: "Ghulam Mustafa"}
+      - {txn_id: "TX0992", external_id: "JC10037340", amount: "680.00",
+         occurred_at: "2026-08-20T13:27:00+05:00", sender_name: "Ayesha Siddiqui"}
+      - {txn_id: "TX0993", external_id: "EP10037811", amount: "4200.00",
+         occurred_at: "2026-08-20T13:33:00+05:00", sender_name: "Tahir Mehmood Chaudhry"}
+      - {txn_id: "TX0994", external_id: "JC10038220", amount: "915.00",
+         occurred_at: "2026-08-20T13:58:00+05:00", sender_name: "Abdul Rehman Sheikh"}
+    claim:
+      amount: "250.00"
+      sender_name: "Bilquis Tanveer"
+      occurred_at: {local: "2026-08-20T13:45:30", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R050
+    expected_reasons: [AMBIGUOUS_CANDIDATES]
+    expected_matched_txn_id: null
+
+  - name: demo-4-two-equal-candidates-on-a-bare-feed
+    about: >
+      Demo case 4 again, stripped of everything that was making it easy. Two
+      Rs 250 payments at the same instant from `Muhammad Ali` - one of the
+      commonest names in Pakistan - a receipt whose transaction id could not be
+      read, and no other traffic in the feed at all.
+
+      Every one of those makes the pair *score* worse without making them any
+      easier to tell apart: no printed id caps the aggregate near 0.9 before
+      scoring starts, and two rows sharing one common name drive that name to
+      the IDF floor. The pair lands at 0.72, and an ambiguity rule gated on
+      `tau_accept` therefore never fired: the claim fell through to R999, which
+      carries no reason codes, and the engine named one of the two arbitrarily
+      for the caller to allocate. Ambiguity is indistinguishability, not
+      strength, so the fixture that proves it has to be the weak one.
+    order: {order_id: "ORD-2205", expected: "250.00"}
+    ledger:
+      - {txn_id: "TX2001", external_id: "EP20010001", amount: "250.00",
+         occurred_at: "2026-08-20T14:00:00+05:00", sender_name: "Muhammad Ali"}
+      - {txn_id: "TX2002", external_id: "EP20020002", amount: "250.00",
+         occurred_at: "2026-08-20T14:00:00+05:00", sender_name: "Muhammad Ali"}
+    claim:
+      amount: "250.00"
+      sender_name: "Muhammad Ali"
+      occurred_at: {local: "2026-08-20T14:00:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R050
+    expected_reasons: [AMBIGUOUS_CANDIDATES]
+    expected_matched_txn_id: null
+
+  - name: unrelated-row-holding-the-printed-id-cannot-break-a-tie
+    about: >
+      Two interchangeable Rs 250 payments whose provider ids share the receipt's
+      tail, plus one transaction that matches nothing at all - wrong amount, six
+      hours away, a different customer - whose provider id happens to be exactly
+      the one printed on the receipt. It ranks last and could never be the
+      match.
+
+      Dominance is the escape hatch that lets a unique printed transaction id
+      win regardless of margin. Counting `REF_EXACT` candidates *anywhere* in
+      the ranking let this bystander switch that hatch on for a pair it has
+      nothing to do with, turning a correct NEEDS_REVIEW into a VERIFIED naming
+      one of two interchangeable payments. Dominance requires the winner to be
+      the one holding the id.
+    order: {order_id: "ORD-2206", expected: "250.00"}
+    ledger:
+      - {txn_id: "TX2011", external_id: "EPA1887766", amount: "250.00",
+         occurred_at: "2026-08-20T13:44:00+05:00", sender_name: "Bilquis Tanveer"}
+      - {txn_id: "TX2012", external_id: "EPB2887766", amount: "250.00",
+         occurred_at: "2026-08-20T13:46:00+05:00", sender_name: "Bilquis Tanveer"}
+      - {txn_id: "TX2013", external_id: "EP99887766", amount: "9990.00",
+         occurred_at: "2026-08-20T07:47:00+05:00", sender_name: "Waqar Younis"}
+    claim:
+      amount: "250.00"
+      reference_id: "EP99887766"
+      sender_name: "Bilquis Tanveer"
+      occurred_at: {local: "2026-08-20T13:45:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R050
+    expected_reasons: [AMBIGUOUS_CANDIDATES]
+    expected_matched_txn_id: null
+
+  # ------------------------------------------------------------------
+  # Names: the field most likely to be right in substance and wrong in string.
+  # ------------------------------------------------------------------
+
+  - name: name-initials-expanded
+    about: >
+      The receipt renders the sender as `B. Tanveer`; the ledger holds
+      `Bilquis Tanveer`. An expanded initial is structural agreement, not a
+      spelling difference, and must not block a verification on its own.
+    order: {order_id: "ORD-2210", expected: "1200.00"}
+    ledger:
+      - {txn_id: "TX1010", external_id: "EP55120744", amount: "1200.00",
+         occurred_at: "2026-08-20T13:44:00+05:00", sender_name: "Bilquis Tanveer"}
+    claim:
+      amount: "1200.00"
+      reference_id: "EP55120744"
+      sender_name: "B. Tanveer"
+      occurred_at: {local: "2026-08-20T13:44:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: name-masked-by-provider
+    about: >
+      Easypaisa prints `Sanaullah B*****`. The visible prefix is consistent
+      with the ledger name and the hidden tail is unknowable, so this is
+      agreement with a discount, not a mismatch.
+    order: {order_id: "ORD-2211", expected: "4750.00"}
+    ledger:
+      - {txn_id: "TX1011", external_id: "EP62901337", amount: "4750.00",
+         occurred_at: "2026-08-20T13:38:00+05:00", sender_name: "Sanaullah Bhatti"}
+    claim:
+      amount: "4750.00"
+      reference_id: "EP62901337"
+      sender_name: "Sanaullah B*****"
+      occurred_at: {local: "2026-08-20T13:38:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: name-unreadable-on-receipt
+    about: >
+      The sender line was cropped out of the screenshot. Absence of a field is
+      not evidence against the transaction - the transaction id and the amount
+      still carry the decision - but it is not free either.
+    order: {order_id: "ORD-2212", expected: "890.00"}
+    ledger:
+      - {txn_id: "TX1012", external_id: "EP77014520", amount: "890.00",
+         occurred_at: "2026-08-20T13:55:00+05:00", sender_name: "Ayesha Siddiqui"}
+    claim:
+      amount: "890.00"
+      reference_id: "EP77014520"
+      occurred_at: {local: "2026-08-20T13:55:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: name-common-only-and-nothing-else
+    about: >
+      No transaction id, a date-only timestamp, and `Muhammad Ali` - a name
+      shared by a meaningful fraction of the country. The amount agrees, but
+      agreement on the commonest name in Pakistan is close to no evidence at
+      all, so this goes to a human rather than through.
+    order: {order_id: "ORD-2213", expected: "1500.00"}
+    ledger:
+      - {txn_id: "TX1013", external_id: "JC30994117", amount: "1500.00",
+         occurred_at: "2026-08-20T12:20:00+05:00", sender_name: "Muhammad Ali"}
+    claim:
+      amount: "1500.00"
+      sender_name: "Muhammad Ali"
+      occurred_at: {local: "2026-08-20T00:00:00", granularity_s: 86400, date_inferred: true}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R999
+    expected_observations: [TIME_DATE_INFERRED]
+
+  # ------------------------------------------------------------------
+  # Time: clocks disagree, receipts round, and timezones are rendered wrong.
+  # ------------------------------------------------------------------
+
+  - name: timestamp-three-minutes-off
+    about: >
+      The receipt stamps initiation, the ledger stamps settlement, and three
+      minutes separate them. This is the single most common benign
+      discrepancy in the whole system and must cost nothing.
+    order: {order_id: "ORD-2220", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1020", external_id: "EP41778290", amount: "2000.00",
+         occurred_at: "2026-08-20T13:52:00+05:00", sender_name: "Tahir Mehmood Chaudhry"}
+    claim:
+      amount: "2000.00"
+      reference_id: "EP41778290"
+      sender_name: "Tahir Mehmood Chaudhry"
+      occurred_at: {local: "2026-08-20T13:49:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: timestamp-one-hour-offset-with-reference
+    about: >
+      Exactly one hour out - a phone left on the wrong timezone, or an app
+      rendering UTC+4. Every other field agrees, including a printed
+      transaction id, so the whole-hour offset is recorded as an observation
+      and the payment verifies.
+    order: {order_id: "ORD-2221", expected: "6300.00"}
+    ledger:
+      - {txn_id: "TX1021", external_id: "EP88420163", amount: "6300.00",
+         occurred_at: "2026-08-20T13:30:00+05:00", sender_name: "Mahnoor Jameel"}
+    claim:
+      amount: "6300.00"
+      reference_id: "EP88420163"
+      sender_name: "Mahnoor Jameel"
+      occurred_at: {local: "2026-08-20T12:30:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+    expected_observations: [TIME_WHOLE_HOUR_OFFSET]
+
+  - name: timestamp-one-hour-offset-no-reference
+    about: >
+      The same hour-off receipt with no transaction id printed on it. Now the
+      only things agreeing are an amount and a name, and an hour is a long
+      time in a busy shop. The honest answer is "a human should look".
+    order: {order_id: "ORD-2222", expected: "6300.00"}
+    ledger:
+      - {txn_id: "TX1022", external_id: "EP88420164", amount: "6300.00",
+         occurred_at: "2026-08-20T13:30:00+05:00", sender_name: "Mahnoor Jameel"}
+    claim:
+      amount: "6300.00"
+      sender_name: "Mahnoor Jameel"
+      occurred_at: {local: "2026-08-20T12:30:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R999
+    expected_observations: [TIME_WHOLE_HOUR_OFFSET]
+
+  - name: timestamp-date-only-receipt
+    about: >
+      A cropped receipt showing `20 Aug 2026` and no clock time. The claim is
+      consistent with the whole day, which is genuinely less evidence than a
+      minute is - but with a matching transaction id it is still plenty.
+    order: {order_id: "ORD-2223", expected: "999.00"}
+    ledger:
+      - {txn_id: "TX1023", external_id: "JC51203944", amount: "999.00",
+         occurred_at: "2026-08-20T11:05:00+05:00", sender_name: "Abdul Rehman Sheikh"}
+    claim:
+      amount: "999.00"
+      reference_id: "JC51203944"
+      sender_name: "Abdul Rehman Sheikh"
+      occurred_at: {local: "2026-08-20T00:00:00", granularity_s: 86400, date_inferred: true}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+    expected_observations: [TIME_DATE_INFERRED]
+
+  # ------------------------------------------------------------------
+  # Amounts: three axes - order vs ledger, receipt vs ledger, readability.
+  # ------------------------------------------------------------------
+
+  - name: underpaid-by-fifty-rupees
+    about: >
+      Rs 2,000 ordered, Rs 1,950 sent, and the receipt honestly says Rs 1,950.
+      Nobody is lying; the merchant is simply Rs 50 short. That is a
+      commercial decision, not a fraud finding, so it goes to the merchant.
+    order: {order_id: "ORD-2230", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1030", external_id: "EP20551908", amount: "1950.00",
+         occurred_at: "2026-08-20T13:41:00+05:00", sender_name: "Ghulam Mustafa"}
+    claim:
+      amount: "1950.00"
+      reference_id: "EP20551908"
+      sender_name: "Ghulam Mustafa"
+      occurred_at: {local: "2026-08-20T13:41:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R070
+    expected_reasons: [AMOUNT_UNDERPAID, CLAIM_CONSISTENT]
+
+  - name: overpaid-by-two-hundred
+    about: >
+      Rs 2,000 ordered, Rs 2,200 arrived. The money is in the account and the
+      order is covered, so the payment verifies - with the overpayment stated,
+      because someone is owed Rs 200 back.
+    order: {order_id: "ORD-2231", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1031", external_id: "EP20551990", amount: "2200.00",
+         occurred_at: "2026-08-20T13:43:00+05:00", sender_name: "Nadia Sultana"}
+    claim:
+      amount: "2200.00"
+      reference_id: "EP20551990"
+      sender_name: "Nadia Sultana"
+      occurred_at: {local: "2026-08-20T13:43:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R080
+    expected_reasons: [AMOUNT_OVERPAID, STRONG_FIELD_AGREEMENT, CLAIM_CONSISTENT]
+
+  - name: claim-inflated-by-five-thousand
+    about: >
+      Rs 7,000 ordered, the receipt says Rs 7,000, and Rs 2,000 arrived. The
+      transaction id and the sender match exactly, which is what makes this an
+      edited screenshot rather than a wrong transaction.
+    order: {order_id: "ORD-2232", expected: "7000.00"}
+    ledger:
+      - {txn_id: "TX1032", external_id: "JC66810422", amount: "2000.00",
+         occurred_at: "2026-08-20T13:36:00+05:00", sender_name: "Rehana Bibi"}
+    claim:
+      amount: "7000.00"
+      reference_id: "JC66810422"
+      sender_name: "Rehana Bibi"
+      occurred_at: {local: "2026-08-20T13:36:00", granularity_s: 60}
+    expected_status: SUSPICIOUS
+    expected_rule: R030
+    expected_reasons: [CLAIM_INFLATED]
+
+  - name: claim-inflated-below-material-threshold
+    about: >
+      The receipt reads Rs 2,020 against a Rs 2,000 transaction. Twenty rupees
+      is OCR noise on a low-contrast screenshot, not an accusation - so the
+      discrepancy is *reported* and the status stays short of SUSPICIOUS.
+      This is the fixture that pins `inflation_material_minor` down.
+    order: {order_id: "ORD-2233", expected: "2000.00"}
+    ledger:
+      - {txn_id: "TX1033", external_id: "EP31447206", amount: "2000.00",
+         occurred_at: "2026-08-20T13:29:00+05:00", sender_name: "Shahzeb Qureshi"}
+    claim:
+      amount: "2020.00"
+      reference_id: "EP31447206"
+      sender_name: "Shahzeb Qureshi"
+      occurred_at: {local: "2026-08-20T13:29:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R999
+    expected_reasons: [AMOUNT_EXACT, CLAIM_INFLATED]
+
+  - name: amount-unreadable-on-receipt
+    about: >
+      A blurred amount line. The engine cannot compare what it cannot read, so
+      the receipt-vs-ledger axis reports UNKNOWN rather than a convenient zero
+      difference - and the transaction id carries the verification instead.
+    order: {order_id: "ORD-2234", expected: "3200.00"}
+    ledger:
+      - {txn_id: "TX1034", external_id: "EP70233815", amount: "3200.00",
+         occurred_at: "2026-08-20T13:26:00+05:00", sender_name: "Zulqarnain Haider"}
+    claim:
+      reference_id: "EP70233815"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:26:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: order-carries-no-expected-total
+    about: >
+      An ad-hoc payment against an order with no total on file. There is
+      nothing to be under or over, and that has to degrade to UNKNOWN rather
+      than masquerade as an exact match.
+    order: {order_id: "ORD-2235", expected: null}
+    ledger:
+      - {txn_id: "TX1035", external_id: "EP70233900", amount: "640.00",
+         occurred_at: "2026-08-20T13:24:00+05:00", sender_name: "Farhat Kanwal"}
+    claim:
+      amount: "640.00"
+      reference_id: "EP70233900"
+      sender_name: "Farhat Kanwal"
+      occurred_at: {local: "2026-08-20T13:24:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, MISSING_ORDER_AMOUNT, CLAIM_CONSISTENT]
+
+  - name: no-order-record-at-all
+    about: >
+      A receipt arriving with no order attached - a customer paying first and
+      explaining later. The engine must still be able to say which transaction
+      it is, without an order to compare against.
+    order: null
+    ledger:
+      - {txn_id: "TX1036", external_id: "JC12007733", amount: "1750.00",
+         occurred_at: "2026-08-20T13:22:00+05:00", sender_name: "Ayesha Siddiqui"}
+    claim:
+      amount: "1750.00"
+      reference_id: "JC12007733"
+      sender_name: "Ayesha Siddiqui"
+      occurred_at: {local: "2026-08-20T13:22:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, MISSING_ORDER_AMOUNT]
+
+  # ------------------------------------------------------------------
+  # Transaction ids: printed, mis-read, truncated, or absent.
+  # ------------------------------------------------------------------
+
+  - name: reference-confusable-characters
+    about: >
+      OCR read `EP48219307` as `EP482I93O7` - capital-I for one, capital-O for
+      zero, the two most common confusions on a phone screenshot. Folding the
+      confusable classes recovers the match; it must never be used to *find*
+      candidates, only to score them.
+    order: {order_id: "ORD-2240", expected: "5400.00"}
+    ledger:
+      - {txn_id: "TX1040", external_id: "EP48219307", amount: "5400.00",
+         occurred_at: "2026-08-20T13:18:00+05:00", sender_name: "Bilquis Tanveer"}
+    claim:
+      amount: "5400.00"
+      reference_id: "EP482I93O7"
+      sender_name: "Bilquis Tanveer"
+      occurred_at: {local: "2026-08-20T13:18:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: reference-suffix-only-on-receipt
+    about: >
+      The provider's confirmation screen shows only the last six digits of the
+      transaction id. A clean suffix is weaker evidence than a full match -
+      the alignment is still unambiguous - but it is far from nothing.
+    order: {order_id: "ORD-2241", expected: "2600.00"}
+    ledger:
+      - {txn_id: "TX1041", external_id: "EP48219307", amount: "2600.00",
+         occurred_at: "2026-08-20T13:15:00+05:00", sender_name: "Tahir Mehmood Chaudhry"}
+    claim:
+      amount: "2600.00"
+      reference_id: "219307"
+      sender_name: "Tahir Mehmood Chaudhry"
+      occurred_at: {local: "2026-08-20T13:15:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: no-transaction-id-printed
+    about: >
+      Plenty of provider receipts simply do not print a transaction id. The
+      amount, the time and the name all agree exactly. An unreadable field
+      must not be able to veto an otherwise perfect match - but it does make
+      acceptance harder, which is the whole point of the missing-evidence
+      penalty.
+    order: {order_id: "ORD-2242", expected: "3100.00"}
+    ledger:
+      - {txn_id: "TX1042", external_id: "EP99320145", amount: "3100.00",
+         occurred_at: "2026-08-20T13:12:00+05:00", sender_name: "Zulqarnain Haider"}
+    claim:
+      amount: "3100.00"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:12:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: two-candidates-one-matches-transaction-id
+    about: >
+      `demo-4-two-equal-candidates` with one field added: this receipt carries
+      a transaction id. Same feed, same twins, same amounts - so this row and
+      that one are a controlled pair, and the transaction id is the only thing
+      that differs. The candidates are no longer interchangeable, and refusing
+      to choose would be the wrong answer here.
+    order: {order_id: "ORD-2243", expected: "250.00"}
+    ledger:
+      - {txn_id: "TX1043", external_id: "EP10038871", amount: "250.00",
+         occurred_at: "2026-08-20T13:40:00+05:00", sender_name: "Bilquis Tanveer"}
+      - {txn_id: "TX1044", external_id: "EP10038994", amount: "250.00",
+         occurred_at: "2026-08-20T13:51:00+05:00", sender_name: "Bilquis Tanveer"}
+      - {txn_id: "TX0991", external_id: "EP10037012", amount: "1340.00",
+         occurred_at: "2026-08-20T13:19:00+05:00", sender_name: "Ghulam Mustafa"}
+      - {txn_id: "TX0992", external_id: "JC10037340", amount: "680.00",
+         occurred_at: "2026-08-20T13:27:00+05:00", sender_name: "Ayesha Siddiqui"}
+      - {txn_id: "TX0993", external_id: "EP10037811", amount: "4200.00",
+         occurred_at: "2026-08-20T13:33:00+05:00", sender_name: "Tahir Mehmood Chaudhry"}
+      - {txn_id: "TX0994", external_id: "JC10038220", amount: "915.00",
+         occurred_at: "2026-08-20T13:58:00+05:00", sender_name: "Abdul Rehman Sheikh"}
+    claim:
+      amount: "250.00"
+      reference_id: "EP10038994"
+      sender_name: "Bilquis Tanveer"
+      occurred_at: {local: "2026-08-20T13:51:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_matched_txn_id: "TX1044"
+
+  # ------------------------------------------------------------------
+  # Nothing to match against, or nothing worth matching.
+  # ------------------------------------------------------------------
+
+  - name: empty-ledger
+    about: >
+      The merchant's feed is empty. No screenshot, however convincing, can be
+      verified against nothing - this is the invariant the whole product rests
+      on, expressed as a fixture.
+    order: {order_id: "ORD-2250", expected: "2000.00"}
+    ledger: []
+    claim:
+      amount: "2000.00"
+      reference_id: "EP48219307"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:52:00", granularity_s: 60}
+    expected_status: UNMATCHED
+    expected_rule: R010
+    expected_reasons: [NO_CANDIDATES]
+    expected_matched_txn_id: null
+
+  - name: ledger-holds-only-a-stale-unrelated-transaction
+    about: >
+      The one transaction in the feed is four days old, from a different
+      person, for a different amount, with a different id. No blocking key
+      reaches it, so retrieval returns nothing at all - which is a different
+      failure from "found something and rejected it", and gets a different
+      rule.
+    order: {order_id: "ORD-2251", expected: "4500.00"}
+    ledger:
+      - {txn_id: "TX0900", external_id: "EP11002299", amount: "12340.00",
+         occurred_at: "2026-08-16T09:10:00+05:00", sender_name: "Ghulam Mustafa"}
+    claim:
+      amount: "4500.00"
+      sender_name: "Nadia Sultana"
+      occurred_at: {local: "2026-08-20T13:10:00", granularity_s: 60}
+    expected_status: UNMATCHED
+    expected_rule: R010
+    expected_reasons: [NO_CANDIDATES]
+
+  - name: candidate-found-but-nothing-agrees
+    about: >
+      A transaction from the same morning gets pulled in by the time window,
+      and then agrees on nothing: wrong person, wrong amount, six hours out.
+      Retrieval is deliberately generous; the scorer is what says no.
+    order: {order_id: "ORD-2252", expected: "4500.00"}
+    ledger:
+      - {txn_id: "TX1050", external_id: "EP44119876", amount: "900.00",
+         occurred_at: "2026-08-20T07:20:00+05:00", sender_name: "Ghulam Mustafa"}
+    claim:
+      amount: "4500.00"
+      sender_name: "Nadia Sultana"
+      occurred_at: {local: "2026-08-20T13:20:00", granularity_s: 60}
+    expected_status: UNMATCHED
+    expected_rule: R060
+    expected_reasons: [NAME_MISMATCH]
+    expected_matched_txn_id: null
+
+  # ------------------------------------------------------------------
+  # Image forensics: an observation is never a verdict on its own.
+  # ------------------------------------------------------------------
+
+  - name: tamper-signals-with-weak-field-match
+    about: >
+      Two independent image signals - an editor signature in the metadata and
+      an ELA anomaly - on a screenshot whose fields only half agree: no
+      transaction id, and forty minutes adrift. Neither the signals nor the
+      weak match would be enough alone; together they are a reason to stop.
+    order: {order_id: "ORD-2260", expected: "3000.00"}
+    ledger:
+      - {txn_id: "TX1060", external_id: "EP55009182", amount: "3000.00",
+         occurred_at: "2026-08-20T13:00:00+05:00", sender_name: "Rehana Bibi"}
+    claim:
+      amount: "3000.00"
+      sender_name: "Rehana Bibi"
+      occurred_at: {local: "2026-08-20T13:40:00", granularity_s: 60}
+    observations: [IMAGE_EDITOR_SIGNATURE, IMAGE_ELA_ANOMALY]
+    expected_status: SUSPICIOUS
+    expected_rule: R040
+    expected_reasons: [TAMPER_OBSERVATIONS]
+    expected_observations: [IMAGE_EDITOR_SIGNATURE, IMAGE_ELA_ANOMALY]
+
+  - name: single-tamper-signal-with-perfect-match
+    about: >
+      One image signal - missing EXIF, which is what a phone screenshot looks
+      like, and what every re-saved image looks like - against a match that
+      agrees on every field. One signal is not evidence of anything, and a
+      system that cries wolf here gets ignored when it matters.
+    order: {order_id: "ORD-2261", expected: "1850.00"}
+    ledger:
+      - {txn_id: "TX1061", external_id: "JC80145523", amount: "1850.00",
+         occurred_at: "2026-08-20T13:33:00+05:00", sender_name: "Mahnoor Jameel"}
+    claim:
+      amount: "1850.00"
+      reference_id: "JC80145523"
+      sender_name: "Mahnoor Jameel"
+      occurred_at: {local: "2026-08-20T13:33:00", granularity_s: 60}
+    observations: [IMAGE_EXIF_MISSING]
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+    expected_observations: [IMAGE_EXIF_MISSING]
+
+  # ------------------------------------------------------------------
+  # Allocation: reuse is only reuse if it is a *different* order.
+  # ------------------------------------------------------------------
+
+  - name: transaction-allocated-to-this-same-order
+    about: >
+      The merchant re-runs a verification on an order that is already settled
+      by this exact transaction. Re-checking your own work is not fraud, and
+      an allocation index that cannot tell the difference would make every
+      dashboard refresh look like a duplicate.
+    order: {order_id: "ORD-2270", expected: "2400.00"}
+    ledger:
+      - {txn_id: "TX1070", external_id: "EP63337781", amount: "2400.00",
+         occurred_at: "2026-08-20T13:08:00+05:00", sender_name: "Abdul Rehman Sheikh"}
+    allocations:
+      - {txn_id: "TX1070", order_id: "ORD-2270"}
+    claim:
+      amount: "2400.00"
+      reference_id: "EP63337781"
+      sender_name: "Abdul Rehman Sheikh"
+      occurred_at: {local: "2026-08-20T13:08:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+    expected_matched_txn_id: "TX1070"
+
+  - name: reused-receipt-beats-a-perfect-field-match
+    about: >
+      Every field agrees perfectly *and* the transaction belongs to another
+      order. Safety-negative outranks safety-positive: a table where a high
+      score can pre-empt the duplicate check is a money-losing bug, so this
+      fixture exists specifically to fail if R020 is ever moved below R090.
+    order: {order_id: "ORD-2271", expected: "9000.00"}
+    ledger:
+      - {txn_id: "TX1071", external_id: "EP71120038", amount: "9000.00",
+         occurred_at: "2026-08-20T13:05:00+05:00", sender_name: "Shahzeb Qureshi"}
+    allocations:
+      - {txn_id: "TX1071", order_id: "ORD-1900"}
+    claim:
+      amount: "9000.00"
+      reference_id: "EP71120038"
+      sender_name: "Shahzeb Qureshi"
+      occurred_at: {local: "2026-08-20T13:05:00", granularity_s: 60}
+    expected_status: DUPLICATE
+    expected_rule: R020
+    expected_reasons: [TXN_ALREADY_ALLOCATED]
+
+  # ------------------------------------------------------------------
+  # Provenance: where the "ledger" row came from is part of the decision.
+  # ------------------------------------------------------------------
+
+  - name: match-against-customer-supplied-row-never-verifies
+    about: >
+      The only "transaction" on file was typed in from the customer's own
+      screenshot. It agrees on every field, because it was copied from the
+      thing being checked. This is the circular verification the engine exists
+      to refuse, and it is refused by an invariant rather than by a threshold -
+      so the engine raises instead of returning a VERIFIED decision.
+    order: {order_id: "ORD-2280", expected: "5500.00"}
+    ledger:
+      - {txn_id: "TX1080", external_id: "EP24680135", amount: "5500.00",
+         occurred_at: "2026-08-20T13:02:00+05:00", sender_name: "Zulqarnain Haider",
+         source: CUSTOMER_SCREENSHOT}
+    claim:
+      amount: "5500.00"
+      reference_id: "EP24680135"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:02:00", granularity_s: 60}
+    expect_invariant_violation: true
+
+  - name: match-against-csv-imported-row-goes-to-review
+    about: >
+      The row agrees on every field, but it came out of a spreadsheet the
+      merchant imported rather than off a ledger feed. That is a real record
+      and worth matching against - and it is not evidence enough to release
+      goods on, because nothing outside the merchant's own typing corroborates
+      it. Trust is a rule (R065), not a crash: before it existed the table
+      returned VERIFIED and the post-condition assertion killed the
+      verification, so a merchant who imports by CSV could get no answer at all.
+    order: {order_id: "ORD-2282", expected: "5500.00"}
+    ledger:
+      - {txn_id: "TX1082", external_id: "EP24680357", amount: "5500.00",
+         occurred_at: "2026-08-20T13:03:00+05:00", sender_name: "Zulqarnain Haider",
+         source: MERCHANT_CSV}
+    claim:
+      amount: "5500.00"
+      reference_id: "EP24680357"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:03:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R065
+    expected_reasons: [SOURCE_PARTIALLY_TRUSTED]
+    expected_matched_txn_id: "TX1082"
+
+  - name: match-against-hand-keyed-row-goes-to-review
+    about: >
+      The same question for a row a human typed into the dashboard. Same
+      answer, and stated as its own fixture because `MANUAL_ENTRY` and
+      `MERCHANT_CSV` are separate members of `Source` and a trust model that
+      only covered one of them would be a hole nobody noticed.
+    order: {order_id: "ORD-2283", expected: "5500.00"}
+    ledger:
+      - {txn_id: "TX1083", external_id: "EP24680468", amount: "5500.00",
+         occurred_at: "2026-08-20T13:04:00+05:00", sender_name: "Zulqarnain Haider",
+         source: MANUAL_ENTRY}
+    claim:
+      amount: "5500.00"
+      reference_id: "EP24680468"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:04:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R065
+    expected_reasons: [SOURCE_PARTIALLY_TRUSTED]
+
+  - name: match-against-simulator-row-verifies
+    about: >
+      The demo feed is generated by the simulator rather than by a real
+      provider, and that is a trusted source: it is the merchant's side of the
+      ledger, not the customer's. Without this the whole demo would be
+      unverifiable by construction.
+    order: {order_id: "ORD-2281", expected: "5500.00"}
+    ledger:
+      - {txn_id: "TX1081", external_id: "EP24680246", amount: "5500.00",
+         occurred_at: "2026-08-20T13:01:00+05:00", sender_name: "Zulqarnain Haider",
+         source: SIMULATOR}
+    claim:
+      amount: "5500.00"
+      reference_id: "EP24680246"
+      sender_name: "Zulqarnain Haider"
+      occurred_at: {local: "2026-08-20T13:01:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]

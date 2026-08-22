@@ -19,6 +19,8 @@ dependencies = [
     "pyjwt>=2.8",
     "pillow>=10.2",
     "rapidfuzz>=3.6",
+    "jellyfish>=1.2.1",
+    "tzdata>=2026.3",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +33,8 @@ dev = [
     "pytest>=8.0",
     "httpx>=0.27",
     "ruff>=0.3",
+    "pyyaml>=6.0.3",
+    "hypothesis>=6.165.10",
 ]
 
 [tool.setuptools.packages.find]
@@ -43,3 +47,17 @@ pythonpath = ["."]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+# FURB157 rewrites `Decimal("1500")` into `Decimal(1500)`. In a codebase whose
+# first rule about money is "never float", steering anyone toward bare numeric
+# literals inside a `Decimal(...)` is the wrong habit to encode: the string form
+# is exact, and `Decimal(1500.00)` is one keystroke away from a silent bug.
+ignore = ["FURB157"]
+
+[tool.ruff.lint.per-file-ignores]
+# Naive datetimes are the subject matter of these tests, not an oversight.
+# `ClaimedInstant.from_local` takes a local wall-clock reading by design, and
+# several tests exist precisely to prove that a naive datetime is refused.
+# DTZ stays enabled for `proofpay/`, where it correctly reports nothing.
+"tests/**" = ["DTZ001"]
