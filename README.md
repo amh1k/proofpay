@@ -9,7 +9,7 @@ screenshots, and payments that never happened.
 > The screenshot is only a payment **claim**.
 > The merchant's transaction record is the **source of truth**.
 
-See the [project overview](proofpay-overview.md) for the full concept, features and demo scenarios.
+See the [project overview](docs/overview.md) for the full concept, features and demo scenarios.
 
 ---
 
@@ -17,11 +17,11 @@ See the [project overview](proofpay-overview.md) for the full concept, features 
 
 **New to the project?** Read in this order:
 
-1. [`proofpay-overview.md`](proofpay-overview.md) — what we're building and why
-2. [`BUILD_PLAN.md`](BUILD_PLAN.md) — the seven phases and what "done" means for each
-3. [`SETUP.md`](SETUP.md) — get it running on your machine
+1. [`proofpay-overview.md`](docs/overview.md) — what we're building and why
+2. [`BUILD_PLAN.md`](docs/build-plan.md) — the seven phases and what "done" means for each
+3. [`SETUP.md`](docs/setup.md) — get it running on your machine
 
-**About to start coding?** Read [`PRACTICES.md`](PRACTICES.md) first — git workflow, testing
+**About to start coding?** Read [`PRACTICES.md`](docs/practices.md) first — git workflow, testing
 strategy, and the licence rules. Then read the guide for your phase in
 [`docs/phases/`](docs/phases/) immediately before you start that phase.
 
@@ -41,7 +41,7 @@ Then open <http://127.0.0.1:8000/health>.
 
 You need [uv](https://docs.astral.sh/uv/) and nothing else — not even Python, which uv installs
 itself. No `.env`, no database server, no cloud account, no API key. Full detail in
-[`SETUP.md`](SETUP.md).
+[`SETUP.md`](docs/setup.md).
 
 ---
 
@@ -51,19 +51,19 @@ itself. No `.env`, no database server, no cloud account, no API key. Full detail
 
 | Document | Contents |
 |---|---|
-| [`proofpay-overview.md`](proofpay-overview.md) | Product concept, features, verification flow, MVP scope, demo scenarios |
-| [`system_design.md`](system_design.md) | Architecture, components, trust model, decision rules, security, ADRs |
-| [`data-model.md`](data-model.md) | Entities, relationships, constraints, invariants, indexing, retention |
+| [`proofpay-overview.md`](docs/overview.md) | Product concept, features, verification flow, MVP scope, demo scenarios |
+| [`system_design.md`](docs/system-design.md) | Architecture, components, trust model, decision rules, security, ADRs |
+| [`data-model.md`](docs/data-model.md) | Entities, relationships, constraints, invariants, indexing, retention |
 
 ### Execution — how we're building it
 
 | Document | Contents |
 |---|---|
-| [`BUILD_PLAN.md`](BUILD_PLAN.md) | The seven phases, in order, with a definition of done for each |
-| [`SETUP.md`](SETUP.md) | Local setup, dependency rules, platform notes |
-| [`PRACTICES.md`](PRACTICES.md) | Environments, git workflow, testing strategy, licensing, execution discipline |
-| [`REFERENCES.md`](REFERENCES.md) | 68 verified reference repositories, with what specifically to take from each |
-| [`COST_CHECK.md`](COST_CHECK.md) | Verification that every component is free or free-tier, and how to avoid a bill |
+| [`BUILD_PLAN.md`](docs/build-plan.md) | The seven phases, in order, with a definition of done for each |
+| [`SETUP.md`](docs/setup.md) | Local setup, dependency rules, platform notes |
+| [`PRACTICES.md`](docs/practices.md) | Environments, git workflow, testing strategy, licensing, execution discipline |
+| [`REFERENCES.md`](docs/references.md) | 68 verified reference repositories, with what specifically to take from each |
+| [`COST_CHECK.md`](docs/cost-check.md) | Verification that every component is free or free-tier, and how to avoid a bill |
 | [`docs/phases/`](docs/phases/) | A deep best-practices guide for each build phase |
 
 ---

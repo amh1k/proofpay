@@ -1,7 +1,7 @@
 # ProofPay — Build Plan
 
 Implementation plan for the hackathon MVP described in
-[proofpay-overview.md](proofpay-overview.md), [system_design.md](system_design.md),
+[proofpay-overview.md](overview.md), [system_design.md](system-design.md),
 and [data-model.md](data-model.md).
 
 The design documents describe *what* ProofPay is. This document describes the
