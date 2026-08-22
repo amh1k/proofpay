@@ -225,7 +225,7 @@ Raw OCR output remains available for debugging but is not the canonical claim.
 Represents trusted or provenance-labelled payment evidence.
 It includes provider identity, external ID, amount, parties, timestamp, ingestion source, and ingestion time.
 ### 8.5 VerificationAttempt
-Represents one processing run for a proof and optional order.
+Represents one processing run for a proof and optional order; when present, the order supplies the expected payable amount.
 It tracks lifecycle state, matched transaction, final status, rule version, timestamps, and failure information.
 ### 8.6 EvidenceItem
 Represents one typed observation used by the decision engine.
@@ -302,9 +302,13 @@ Before comparison:
 - preserve original and normalized values;
 - convert timestamps to UTC while retaining source timezone assumptions.
 ### 10.2 Candidate Retrieval
-Candidate retrieval narrows the merchant's transaction set using indexed filters: external transaction ID, provider, amount, bounded time window, and receiving account.
-Retrieval should be generous enough to find edited claims while remaining bounded.
-A transaction-ID match should still retrieve a candidate when the claimed amount was altered.
+Candidate retrieval uses the narrowest reliable evidence while still finding edited claims.
+| Available evidence | MVP retrieval policy |
+|---|---|
+| Reliable transaction ID | Search the merchant/provider ID index directly; do not reject for time or amount conflict |
+| No reliable ID, reliable timestamp | Same merchant, provider, receiving account, and a configurable ±30-minute window |
+| Missing/low-confidence timestamp | Same merchant, provider, and amount during the claimed calendar day; candidates require review |
+The 30-minute default is illustrative, provider-specific, configurable, and stored with the rule version. Wider fallback searches may suggest review candidates but cannot independently produce `VERIFIED`.
 ### 10.3 Candidate Scoring
 Each candidate receives field-level scores.
 ```text
@@ -334,6 +338,8 @@ Concurrent attempts cannot both consume the same transaction: one succeeds and t
 The system compares SHA-256 for byte-identical files and perceptual hash distance for resized, compressed, or lightly cropped variants.
 Perceptual matches are warnings until corroborated by transaction identity or review.
 The MVP scans a merchant's recent proofs; cross-merchant comparison is prohibited because it would violate tenant boundaries and expose unrelated customer data.
+Consequently, cross-merchant proof reuse is an accepted MVP risk rather than a detectable event.
+A production design may add a privacy-reviewed fraud-signal service using keyed, non-reversible fingerprints, but it must return only a generic reuse signal and never expose another merchant's proof, transaction, or identity.
 
 ## 12. Decision Model
 
@@ -362,7 +368,17 @@ Tamper evidence can strengthen `SUSPICIOUS` or trigger review, but cannot indepe
 | No | Unknown | No | Sufficient | `UNMATCHED` |
 | Ambiguous | Unknown | No | Any | `NEEDS_REVIEW` |
 | Any | Unknown | No | Insufficient | `NEEDS_REVIEW` |
-### 12.4 Explanation Contract
+### 12.4 Amount Semantics
+Amount evaluation compares `order_amount`, screenshot `claimed_amount`, and trusted `transaction_amount`; reason codes may coexist and the safest applicable result wins.
+| Condition | Reason code | Result tendency |
+|---|---|---|
+| All three amounts equal | `AMOUNT_MATCH` | Pass |
+| Transaction amount below order amount | `UNDERPAID` | `SUSPICIOUS` |
+| Claimed amount above transaction amount | `CLAIMED_AMOUNT_INFLATED` | `SUSPICIOUS` |
+| Transaction amount above order amount | `OVERPAYMENT_REVIEW` | `NEEDS_REVIEW` |
+| Claim below transaction while transaction equals order | `CLAIM_UNDERSTATED` | `NEEDS_REVIEW` |
+The MVP requires exact equality in integer PKR minor units. Any future tolerance must be provider-specific, justified, configured, and rule-versioned. Without an order amount, ProofPay compares claim and transaction but cannot assert that the order is fully paid.
+### 12.5 Explanation Contract
 The response includes final status, risk, summary, claimed fields, authorized matched fields, ordered reason codes, field outcomes, recommended action, rule version, and verification identifier.
 The frontend formats this contract but must not reinterpret the decision.
 
@@ -399,8 +415,11 @@ Key constraints include:
 - every merchant-owned row includes `merchant_id`;
 - provider transactions are unique within merchant and provider scope;
 - accepted transaction allocations are unique;
-- an idempotency key maps to one verification attempt per merchant;
+- an idempotency key maps to one request fingerprint and verification attempt per merchant;
 - decisions reference immutable evidence and a rule version.
+The fingerprint covers the merchant, order, proof content hash, and decision-relevant request fields.
+The same key with the same fingerprint returns the original in-progress or completed attempt. The same key with a different fingerprint is rejected as `409 IDEMPOTENCY_CONFLICT`; it never replaces or reuses the original result.
+Concurrent identical requests converge on the same attempt. Expired keys follow a configured retention period; the MVP default is 24 hours.
 Proof storage and database writes cannot be one physical transaction.
 The orchestrator therefore uses compensating behavior:
 - if image upload fails, no processing begins;
@@ -443,6 +462,10 @@ Logs exclude full OCR text, screenshots, access tokens, and unnecessary personal
 ### 15.5 Auditability
 Audit events cover proof upload, transaction ingestion, decision creation, manual override, and access to sensitive evidence.
 Manual overrides record actor, timestamp, previous state, new state, and reason.
+### 15.6 Abuse and Threshold-Fishing Controls
+Submission limits apply per user, merchant, order, and source IP. The MVP default permits five attempts per order in 15 minutes, after which the API returns `429` and flags the order for review.
+Repeated near-miss claims, rotating proofs for one order, and attempts across multiple users create audit events and may force `NEEDS_REVIEW`.
+Verifier responses never reveal raw match scores, thresholds, ranked candidates, or unrestricted transaction details that could help an attacker probe acceptance rules.
 
 ## 16. Failure and Degradation Strategy
 
@@ -457,8 +480,10 @@ Manual overrides record actor, timestamp, previous state, new state, and reason.
 | Object storage unavailable | Fail request safely | No decision |
 | Database write fails | Do not report success | Retry/error |
 | Processing timeout | Record incomplete attempt | `NEEDS_REVIEW` |
+| Repeated near-miss submissions | Rate-limit and flag the order | `NEEDS_REVIEW` |
 Component failures are isolated where safe, but trusted matching and duplicate checks are mandatory for automatic approval.
 Retries are idempotent and bounded with backoff for external dependencies.
+Cross-merchant screenshot reuse remains an explicitly accepted MVP risk; tenant privacy takes precedence until a privacy-reviewed shared fraud-signal design exists.
 
 ## 17. Observability
 
@@ -482,19 +507,10 @@ Use table-driven tests for every state and precedence rule, proving absent or pr
 ### 18.2 Matching and Concurrency Tests
 Cover exact IDs, altered amounts, sender variation, timestamp drift, ambiguity, and no-match cases.
 Submit the same transaction concurrently and verify that at most one allocation succeeds.
-Retry identical upload requests and verify idempotent attempt creation.
+Retry identical uploads and verify one attempt; reuse the key with a changed payload and verify `409 IDEMPOTENCY_CONFLICT`.
+Verify underpayment, claim inflation, overpayment, candidate-window boundaries, and per-order rate limiting.
 ### 18.3 End-to-End Demo Set
-The minimum dataset includes:
-1. genuine payment;
-2. edited amount with matching transaction ID;
-3. nonexistent transaction;
-4. reused transaction;
-5. visually similar reused screenshot;
-6. fuzzy sender-name match;
-7. ambiguous transactions;
-8. unreadable receipt;
-9. unavailable optional analyzer;
-10. cross-merchant access attempt.
+The minimum dataset includes genuine payment, edited amount, underpayment, overpayment, nonexistent transaction, transaction/proof reuse, fuzzy sender match, ambiguity, unreadable receipt, optional-analyzer failure, rate limiting, and cross-merchant access denial.
 The headline demo should show genuine, edited, reused, and ambiguous proofs.
 
 ## 19. MVP Deployment
@@ -526,9 +542,7 @@ Likely evolution steps are:
 1. Move long-running image analysis behind an internal job queue.
 2. Add provider webhook consumers and reconciliation polling.
 3. Autoscale OCR and vision inference workers.
-4. Partition verification history when necessary.
-5. Add a similarity index only when proof volume justifies it.
-6. Separate services only where scaling or availability requirements differ.
+4. Add partitioning, a similarity index, or service separation only when measured scale or availability requirements justify them.
 An asynchronous production flow may become:
 ```text
 API → durable job → analysis workers → decision engine → persisted result → notification
@@ -537,39 +551,28 @@ The domain contracts and evidence model remain stable across that transition.
 
 ## 21. Architectural Decisions
 
-### ADR-001 — Merchant Transactions Are Authoritative
-**Decision:** Require trusted merchant-side evidence for `VERIFIED`.
-**Reason:** Screenshot appearance cannot prove that funds reached the merchant.
-### ADR-002 — Use a Modular Monolith for the MVP
-**Decision:** Keep API, orchestration, matching, and analysis in one deployable backend.
-**Reason:** This minimizes operational risk while retaining clean boundaries.
-### ADR-003 — Use an Evidence-Based Decision Engine
-**Decision:** Produce states from typed evidence and versioned deterministic rules.
-**Reason:** Financial decisions must be explainable, testable, and reproducible.
-### ADR-004 — Separate Binary and Relational Storage
-**Decision:** Store screenshots in private object storage and structured state in a relational database.
-**Reason:** Each storage system is used for the workload it handles best.
-### ADR-005 — Normalize Provider Data at the Boundary
-**Decision:** Convert receipts and provider transactions into canonical domain models.
-**Reason:** Decision logic should not know provider-specific layouts or payloads.
-### ADR-006 — Simulate Trusted Transactions in the MVP
-**Decision:** Use a simulator or import behind the production provider interface.
-**Reason:** The demo validates reconciliation without unavailable banking integrations.
-### ADR-007 — Keep Processing Synchronous Initially
-**Decision:** Execute the bounded MVP pipeline within one request where latency permits.
-**Reason:** It gives the simplest reliable demo and avoids premature queue infrastructure.
-### ADR-008 — Make Transaction Consumption Atomic
-**Decision:** Enforce allocation uniqueness in the database.
-**Reason:** Application-level duplicate checks are unsafe under concurrency.
-### ADR-009 — Version Models and Rules
-**Decision:** Persist parser, model, threshold, and rule versions with evidence.
-**Reason:** Results must remain explainable when implementations change.
+| ADR | Decision | Primary reason |
+|---|---|---|
+| 001 | Trusted merchant transactions are required for `VERIFIED` | Screenshot appearance cannot prove receipt of funds |
+| 002 | Use a modular monolith for the MVP | Minimize operational risk while retaining boundaries |
+| 003 | Decide from typed evidence and deterministic rules | Results must be explainable and reproducible |
+| 004 | Separate private object and relational storage | Match storage systems to their workloads |
+| 005 | Normalize provider data at the boundary | Keep provider formats out of decision logic |
+| 006 | Simulate trusted transactions in the MVP | Validate reconciliation without banking integrations |
+| 007 | Keep bounded processing synchronous initially | Preserve the simplest reliable demo |
+| 008 | Enforce transaction allocation uniqueness in the database | Prevent concurrent double consumption |
+| 009 | Version parsers, models, thresholds, and rules | Preserve result explainability across changes |
+| 010 | Bind idempotency keys to request fingerprints | Prevent key reuse with changed payloads |
+| 011 | Rate-limit verification attempts without exposing thresholds | Reduce acceptance-rule probing |
+| 012 | Accept cross-merchant reuse blindness in the MVP | Preserve tenant privacy until shared signals are reviewed |
 
 ## 22. Architecture Fitness Criteria
 
 The MVP architecture is successful when:
 - no screenshot can be `VERIFIED` without a trusted transaction match;
+- amount decisions distinguish underpayment, claim inflation, and overpayment;
 - the same transaction cannot be accepted twice under concurrency;
+- idempotency keys cannot be reused with a different payload;
 - every result contains inspectable reason codes;
 - provider formats do not leak into decision rules;
 - analyzer failure degrades safely;
