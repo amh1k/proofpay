@@ -27,3 +27,10 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Reference clones and local design scratch — never commit these.
+# They live outside the repo, but this is a second line of defence.
+_reference/
+reference/
+shots/
+*.local.html
