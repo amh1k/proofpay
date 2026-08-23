@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A new push to the same branch cancels the previous run — a hackathon has
+  # better uses for CI minutes than finishing a build nobody will read.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — tests and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        # --frozen installs the lockfile exactly and FAILS if pyproject.toml and
+        # uv.lock disagree. That turns "someone forgot to commit the lock" into a
+        # red build instead of a mystery bug on one laptop three days later.
+        run: uv sync --frozen
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Lint
+        # Annotates the diff inline on pull requests.
+        #
+        # `../tools/` is deliberately not linted yet: it sits outside this project
+        # root and carries 18 findings from before CI existed (issue #3). Add it to
+        # this line once Track C has cleared them — a red build everyone learns to
+        # ignore is worse than no build at all.
+        run: uv run ruff check proofpay tests --output-format=github
+
+  frontend:
+    name: Frontend — build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Track D does not exist yet. Rather than a job that fails until it does,
+      # this one skips cleanly and starts working the moment frontend/package.json
+      # lands — no CI edit required at that point.
+      - name: Is there a frontend yet?
+        id: check
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No frontend/package.json yet — skipping."
+          fi
+
+      - name: Setup Node
+        if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
+        # `npm ci` installs the lockfile exactly and errors if it is out of sync
+        # with package.json — the Node equivalent of `uv sync --frozen`.
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build
+        if: steps.check.outputs.exists == 'true'
+        run: npm run build
+        working-directory: frontend
