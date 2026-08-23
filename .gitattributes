@@ -2,3 +2,4 @@
 *.png binary
 *.jpg binary
 *.jpeg binary
+fixtures/demo/manifest.json text eol=lf
