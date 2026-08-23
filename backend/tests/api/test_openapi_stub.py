@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from proofpay.api.v1.stub_data import DEMO_VERIFICATIONS
+from proofpay.core.reasons import ReasonCode
 from proofpay.main import create_app
 
 
@@ -59,6 +61,20 @@ def test_create_verification_returns_decision_contract() -> None:
         "sender_name",
         "timestamp",
     }
+
+
+def test_demo_decisions_match_engine_rule_ids_and_reason_types() -> None:
+    expected_rules = {
+        "VERIFIED": "R090",
+        "SUSPICIOUS": "R030",
+        "DUPLICATE": "R020",
+        "NEEDS_REVIEW": "R050",
+        "UNMATCHED": "R010",
+    }
+
+    for decision in DEMO_VERIFICATIONS:
+        assert decision.fired_rule_id == expected_rules[decision.status]
+        assert all(isinstance(reason, ReasonCode) for reason in decision.reasons)
 
 
 def test_claims_route_is_available_as_deprecated_alias() -> None:

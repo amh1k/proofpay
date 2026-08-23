@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from proofpay.core.reasons import ReasonCode
+
 from .schemas import (
     DashboardSummary,
     EvidenceAgreement,
@@ -120,9 +122,13 @@ DEMO_VERIFICATION = VerificationResult(
         status=DEMO_TRANSACTION.status,
     ),
     matched_txn_id=DEMO_TRANSACTION.id,
-    reasons=["AMOUNT_EXACT", "CLAIM_CONSISTENT", "STRONG_FIELD_AGREEMENT"],
+    reasons=[
+        ReasonCode.AMOUNT_EXACT,
+        ReasonCode.CLAIM_CONSISTENT,
+        ReasonCode.STRONG_FIELD_AGREEMENT,
+    ],
     summary="The claimed payment matches a trusted transaction record.",
-    fired_rule_id="R020",
+    fired_rule_id="R090",
     evidence=DEMO_EVIDENCE,
     recommended_action="Payment verified. Continue the order.",
     ruleset_version="rules/2026-08-22.1",
@@ -141,7 +147,7 @@ DEMO_VERIFICATIONS = [
             "risk": RiskLevel.HIGH,
             "confidence": 0.97,
             "claim": DEMO_CLAIM.model_copy(update={"amount_minor": 500_000}),
-            "reasons": ["CLAIM_INFLATED", "AMOUNT_UNDERPAID"],
+            "reasons": [ReasonCode.CLAIM_INFLATED, ReasonCode.AMOUNT_UNDERPAID],
             "summary": "The screenshot claims more than the trusted transaction received.",
             "fired_rule_id": "R030",
             "evidence": [
@@ -166,9 +172,9 @@ DEMO_VERIFICATIONS = [
             "status": VerificationStatus.DUPLICATE,
             "risk": RiskLevel.HIGH,
             "confidence": 1.0,
-            "reasons": ["TXN_ALREADY_ALLOCATED"],
+            "reasons": [ReasonCode.TXN_ALREADY_ALLOCATED],
             "summary": "This trusted transaction is already allocated to another order.",
-            "fired_rule_id": "R040",
+            "fired_rule_id": "R020",
             "recommended_action": "Do not reuse this payment. Review the previous order.",
         }
     ),
@@ -181,7 +187,7 @@ DEMO_VERIFICATIONS = [
             "confidence": 0.62,
             "matched_txn_id": None,
             "matched_transaction": None,
-            "reasons": ["AMBIGUOUS_CANDIDATES"],
+            "reasons": [ReasonCode.AMBIGUOUS_CANDIDATES],
             "summary": "Multiple possible transactions require a human decision.",
             "fired_rule_id": "R050",
             "recommended_action": "Review the possible transactions manually.",
@@ -196,7 +202,7 @@ DEMO_VERIFICATIONS = [
             "confidence": 0.42,
             "matched_txn_id": None,
             "matched_transaction": None,
-            "reasons": ["NO_CANDIDATES"],
+            "reasons": [ReasonCode.NO_CANDIDATES],
             "summary": "No trusted transaction currently matches this payment claim.",
             "fired_rule_id": "R010",
             "recommended_action": "Wait for the transaction feed or check the payment details.",
