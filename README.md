@@ -31,17 +31,36 @@ strategy, and the licence rules. Then read the guide for your phase in
 
 ```bash
 git clone https://github.com/amh1k/proofpay.git
-cd proofpay/backend
+cd proofpay
+```
+
+**The merchant client** — runs on its own, no backend needed:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open <http://localhost:5173>. Three buttons on the upload screen walk the three demo cases:
+an edited amount, a reused payment, and one that has not arrived yet. Add `?present=1` to raise
+the type size for a projector.
+
+**The backend** — engine and API:
+
+```bash
+cd backend
 uv sync
 uv run pytest
 uv run uvicorn proofpay.main:app --reload
 ```
 
-Then open <http://127.0.0.1:8000/health>.
+Open <http://127.0.0.1:8000/docs> for the interactive API. Sign in at `POST /api/v1/auth/token`
+with username `owner` and any password, then click **Authorize**.
 
-You need [uv](https://docs.astral.sh/uv/) and nothing else — not even Python, which uv installs
-itself. No `.env`, no database server, no cloud account, no API key. Full detail in
-[`SETUP.md`](docs/setup.md).
+You need [uv](https://docs.astral.sh/uv/) and Node 22 — nothing else, not even Python, which uv
+installs itself. No `.env`, no database server, no cloud account, no API key. Full detail in
+[`setup.md`](docs/setup.md).
 
 ---
 
@@ -123,10 +142,10 @@ key degrades quality but never breaks the demo.
 
 | | |
 |---|---|
-| [@amh1k](https://github.com/amh1k) | Architecture and design documents |
-| [@HuzaifaAbdulRehman](https://github.com/HuzaifaAbdulRehman) | |
-| [@SaadShakeel1](https://github.com/SaadShakeel1) | |
-| [@MuhammadBilal64](https://github.com/MuhammadBilal64) | |
+| [@amh1k](https://github.com/amh1k) | Architecture and design documents · platform, API and persistence |
+| [@HuzaifaAbdulRehman](https://github.com/HuzaifaAbdulRehman) | Verification engine · merchant client · CI |
+| [@SaadShakeel1](https://github.com/SaadShakeel1) | Receipt dataset · receipt understanding |
+| [@MuhammadBilal64](https://github.com/MuhammadBilal64) | Demo, pitch and documentation |
 
 ---
 
