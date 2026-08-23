@@ -1,0 +1,215 @@
+/* ProofPay — SIGNAGE design tokens.
+ *
+ * The verdict is not a card. It is a SIGN: a full-bleed coloured field, one very
+ * large word, one shape, generous clear space. Read from six metres, in a bright
+ * room, off a projector.
+ *
+ * Everything below is a contract. Read `src/lib/status.ts` before picking a colour
+ * by hand — the status lookup already knows which one you want.
+ */
+
+@theme {
+  /* ── palette ──────────────────────────────────────────────────────────────
+   * Contrast-verified. Do NOT add a colour here without checking it.
+   * mismatch/duplicate share a field on purpose: the silhouette separates them.
+   */
+  --color-ink: #101214;          /* ground for all chrome                      */
+  --color-mismatch: #7a0f22;     /* white on it = 10.94:1                      */
+  --color-duplicate: #7a0f22;    /* same field, different glyph                */
+  --color-verified: #0b4f3f;     /* white on it                                */
+  --color-review: #6b4200;       /* white on it                                */
+  --color-notfound: #ffffff;     /* NOT FOUND has no fill and no colour        */
+  --color-pale-red: #f0c8ce;     /* supporting text on mismatch / duplicate    */
+  --color-pale-green: #c2ded4;   /* supporting text on verified                */
+  --color-rule: #cfd4dd;         /* the dashed rule on NOT FOUND               */
+
+  /* Two emphases of the same ink. Alpha of an existing colour, not a new hue. */
+  --color-on-field: #ffffff;
+  --color-on-field-dim: rgba(255, 255, 255, 0.72);
+  --color-on-paper: #101214;
+  --color-on-paper-dim: rgba(16, 18, 20, 0.72);
+
+  /* ── type ─────────────────────────────────────────────────────────────────
+   * No CDN, no webfont, no network. Venue wifi will fail.
+   */
+  --font-sans: "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+  --font-num: "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+  --font-num--font-feature-settings: "tnum" 1, "zero" 1;
+
+  /* Signage sizes. Fluid, so one component serves phone and projector. */
+  --text-verdict: clamp(38px, 7vw, 72px);
+  --text-verdict--line-height: 1.02;
+  --text-verdict--letter-spacing: -0.035em;
+  --text-verdict--font-weight: 800;
+
+  --text-figure: clamp(38px, 6vw, 64px);
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.03em;
+  --text-figure--font-weight: 800;
+
+  --text-lede: clamp(18px, 2.2vw, 26px);
+  --text-lede--line-height: 1.4;
+
+  --text-meta: 13px;
+  --text-meta--line-height: 18px;
+  --text-meta--letter-spacing: 0.14em;
+
+  /* ── spacing ──────────────────────────────────────────────────────────────
+   * The dynamic scale is OFF. Only these nine steps exist, so `p-5` and
+   * `gap-[19px]` are not merely discouraged — they generate nothing at all.
+   *   1=4  2=8  3=12  4=16  6=24  8=32  12=48  16=64  24=96
+   */
+  --spacing: initial;
+  --spacing-*: initial;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+  --spacing-24: 96px;
+}
+
+/* ── variants ──────────────────────────────────────────────────────────────── */
+
+/* A projector is 720 or 768 pixels TALL, and a phone is shorter still. Every
+ * breakpoint Tailwind ships measures width, so a sign tuned on a laptop pushes
+ * its two buttons under the fold on the one screen that matters. `short:` is the
+ * height answer, and it only ever tightens vertical rhythm — it never changes
+ * what is on the screen, and it stays on the nine-step spacing scale. */
+@custom-variant short (@media (max-height: 820px));
+
+/* ── utilities ─────────────────────────────────────────────────────────────── */
+
+/* Money, references, clock times. Rule 7: tabular figures + slashed zero. */
+@utility num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* The thin uppercase caption above a figure or beside the brand. */
+@utility cap {
+  font-size: var(--text-meta);
+  line-height: 18px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+/* Rule 10: ONE one-shot fade. Stagger with an inline animation-delay on each
+ * row (0ms, 40ms, 80ms, 120ms). Never `transition: all`, never a loop. */
+@keyframes pp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility evidence-in {
+  animation: pp-rise 240ms ease-out both;
+}
+
+/* ── base ──────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-ink);
+    color: var(--color-on-field);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Rule 9. `currentColor` is right in every context: on a coloured field the
+   * text is white, on the NOT FOUND ground it is ink. Never write outline:none. */
+  :focus-visible {
+    outline: 3px solid currentColor;
+    outline-offset: 3px;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+/* ── projector mode ────────────────────────────────────────────────────────── */
+
+/* `?present=1` stamps `data-present="on"` on the root element before the first
+ * render (see `src/lib/present.ts`). Everything gets bigger; nothing moves.
+ *
+ * This is deliberately NOT browser zoom. Zoom shrinks the CSS viewport, so a
+ * 1280px projector at 150% lays out as an 853px screen and the two amounts stack
+ * on stage. Raising the type from inside leaves every breakpoint where it was.
+ *
+ * Only type is touched. The 4/8/12… spacing scale stays exactly as it is: the
+ * clear space around a sign is already generous, and scaling it too would push
+ * the actions under the fold on the 720p screen this mode exists for. */
+:root[data-present='on'] {
+  font-size: 20px; /* every rem-based Tailwind step follows this up */
+
+  --text-verdict: clamp(46px, 8vw, 104px);
+  --text-figure: clamp(44px, 7vw, 92px);
+  --text-lede: clamp(21px, 2.6vw, 34px);
+  --text-meta: 16px;
+}
+
+:root[data-present='on'] body {
+  font-size: 20px;
+  line-height: 30px;
+}
+
+/* `cap` carries a literal line-height, so it cannot follow `--text-meta` alone. */
+:root[data-present='on'] .cap {
+  line-height: 22px;
+}
+
+/* How much bigger a sign can get is decided by the height of the screen, not by
+ * how far away the room is. On a 1080p projector the block above wins. On a 720p
+ * one the full lift pushes the two actions off the bottom, so the lift is smaller
+ * — still plainly larger than the laptop layout, still the whole sign on screen. */
+@media (max-height: 820px) {
+  :root[data-present='on'] {
+    font-size: 18px;
+
+    --text-verdict: clamp(42px, 7.2vw, 84px);
+    --text-figure: clamp(40px, 6.4vw, 76px);
+    --text-lede: clamp(19px, 2.4vw, 30px);
+    --text-meta: 15px;
+  }
+
+  :root[data-present='on'] body {
+    font-size: 18px;
+    line-height: 27px;
+  }
+
+  :root[data-present='on'] .cap {
+    line-height: 20px;
+  }
+}
+
+/* Rule 10: the guard. Keep this last so it wins. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}

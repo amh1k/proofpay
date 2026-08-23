@@ -90,9 +90,19 @@ export interface VerificationResult {
   degraded: boolean
 }
 
-export interface VerificationList {
-  items: VerificationResult[]
-  total: number
+/**
+ * One row of the history, as the app actually uses it.
+ *
+ * `GET /verifications` returns whole verifications in the generated mocks and
+ * thin list items from the live API. Everything the app does with that list —
+ * build the demo rail, pick something to replay — needs an id and a status and
+ * nothing else, so `src/api/adapt.ts` folds both dialects into this and no screen
+ * ever has to know which backend it is talking to.
+ */
+export interface VerificationSummary {
+  id: string
+  order_id: string | null
+  status: VerificationStatus
 }
 
 export interface DashboardSummary {
@@ -104,12 +114,11 @@ export interface DashboardSummary {
   needs_review: number
 }
 
-/** Money crosses the wire as an integer count of paisa. Never a float. */
-export function formatMoney(minor: number | null, currency = 'PKR'): string {
-  if (minor === null) return '—'
-  const major = (minor / 100).toLocaleString('en-PK', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })
-  return currency === 'PKR' ? `Rs ${major}` : `${currency} ${major}`
-}
+/**
+ * Money crosses the wire as an integer count of paisa. Never a float.
+ *
+ * The implementation lives in `src/lib/money.ts` and is re-exported here so the
+ * scaffold's original import path keeps working. There is exactly one formatter —
+ * prefer importing it from `lib/money`, which also carries `amountGap`.
+ */
+export { formatMoney } from './lib/money'

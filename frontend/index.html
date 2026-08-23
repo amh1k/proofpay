@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- No maximum-scale and no user-scalable=no: a merchant pinching to read a
+         reference number is not a bug. Projector sizing is `?present=1`. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The ink ground, so a phone's chrome does not frame the sign in white. -->
+    <meta name="theme-color" content="#101214" />
+    <meta
+      name="description"
+      content="ProofPay checks a customer's payment screenshot against the payments that actually reached your account."
+    />
     <title>ProofPay</title>
   </head>
   <body>
