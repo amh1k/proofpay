@@ -25,7 +25,6 @@ DATA MODEL PER CASE:
 from __future__ import annotations
 
 import json
-import random
 import sys
 from pathlib import Path
 
@@ -34,22 +33,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from pk_data import (
-    BUSINESS_NAMES,
-    FAMILY_NAMES,
-    GIVEN_NAMES_MALE,
-    demo_id,
     demo_txn_ref,
-    mask_msisdn,
     pk_iban,
-    random_msisdn,
 )
-from proofpay.demo.clock import at
 
 
 def generate_manifest() -> dict:
     """Build the complete 30-case demo manifest data structure."""
 
-    rng = random.Random(42)  # Seeded for absolute determinism
     cases = []
 
     # Common receiver for all demo transactions
@@ -82,7 +73,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -12,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-G01",
@@ -90,8 +81,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "VERIFIED",
-            "reason_code": "EXACT_MATCH",
-            "rules_version": "v1.0.0",
+            "reason_code": "STRONG_FIELD_AGREEMENT",
         },
     })
 
@@ -117,7 +107,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -21,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-G02",
@@ -125,8 +115,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "VERIFIED",
-            "reason_code": "MATCH_WITH_FUZZY_SENDER",
-            "rules_version": "v1.0.0",
+            "reason_code": "STRONG_FIELD_AGREEMENT",
         },
     })
 
@@ -165,7 +154,7 @@ def generate_manifest() -> dict:
                 "receiver_name": MERCHANT_RECEIVER,
                 "ledger_offset_min": -(idx * 5 + 1),
                 "status": "POSTED",
-                "trust_level": "DEMO_TRUSTED",
+                "trust_level": "SIMULATOR",
             },
             "order": {
                 "external_order_ref": f"ORD-{cid}",
@@ -173,9 +162,8 @@ def generate_manifest() -> dict:
             },
             "expected": {
                 "outcome": "VERIFIED",
-                "reason_code": "EXACT_MATCH" if cid != "G05" else "OVERPAYMENT_ACCEPTED",
-                "rules_version": "v1.0.0",
-            },
+                "reason_code": "STRONG_FIELD_AGREEMENT" if cid != "G05" else "AMOUNT_OVERPAID",
+                },
         })
 
     # ═════════════════════════════════════════════════════════════════
@@ -202,8 +190,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "UNMATCHED",
-            "reason_code": "NO_MATCHING_TRANSACTION",
-            "rules_version": "v1.0.0",
+            "reason_code": "NO_CANDIDATES",
         },
     })
 
@@ -228,7 +215,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -2,
             "status": "PENDING",  # Not posted yet!
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-U02",
@@ -236,8 +223,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "UNMATCHED",
-            "reason_code": "TRANSACTION_PENDING_SETTLEMENT",
-            "rules_version": "v1.0.0",
+            "reason_code": "NO_CANDIDATES",
         },
     })
 
@@ -261,8 +247,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "UNMATCHED",
-            "reason_code": "TRANSACTION_OUTSIDE_WINDOW",
-            "rules_version": "v1.0.0",
+            "reason_code": "TIMESTAMP_MISMATCH",
         },
     })
 
@@ -286,8 +271,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "UNMATCHED",
-            "reason_code": "MISMATCHED_RECEIVER",
-            "rules_version": "v1.0.0",
+            "reason_code": "NAME_MISMATCH",
         },
     })
 
@@ -318,7 +302,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -11,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-S01",
@@ -326,8 +310,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "SUSPICIOUS",
-            "reason_code": "CLAIMED_AMOUNT_INFLATED",
-            "rules_version": "v1.0.0",
+            "reason_code": "CLAIM_INFLATED",
         },
     })
 
@@ -354,7 +337,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -16,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-S02",
@@ -362,8 +345,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "SUSPICIOUS",
-            "reason_code": "REFERENCE_ID_TAMPERED",
-            "rules_version": "v1.0.0",
+            "reason_code": "REFERENCE_MISMATCH",
         },
     })
 
@@ -398,7 +380,7 @@ def generate_manifest() -> dict:
                 "receiver_name": MERCHANT_RECEIVER,
                 "ledger_offset_min": -11,
                 "status": "POSTED",
-                "trust_level": "DEMO_TRUSTED",
+                "trust_level": "SIMULATOR",
             },
             "order": {
                 "external_order_ref": f"ORD-{cid}",
@@ -406,9 +388,8 @@ def generate_manifest() -> dict:
             },
             "expected": {
                 "outcome": "SUSPICIOUS",
-                "reason_code": "CRITICAL_FIELD_CONFLICT",
-                "rules_version": "v1.0.0",
-            },
+                "reason_code": "FIELD_CONTRADICTS_MATCH",
+                },
         })
 
     # ═════════════════════════════════════════════════════════════════
@@ -436,7 +417,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -12,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-D01",  # Second order trying to claim G01's payment
@@ -444,8 +425,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "DUPLICATE",
-            "reason_code": "TRANSACTION_ALREADY_ALLOCATED",
-            "rules_version": "v1.0.0",
+            "reason_code": "TXN_ALREADY_ALLOCATED",
         },
     })
 
@@ -470,7 +450,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -21,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-D02",
@@ -478,8 +458,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "DUPLICATE",
-            "reason_code": "PROOF_IMAGE_SHA256_REUSED",
-            "rules_version": "v1.0.0",
+            "reason_code": "PROOF_REUSED",
         },
     })
 
@@ -504,7 +483,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -16,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-D03",
@@ -512,8 +491,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "DUPLICATE",
-            "reason_code": "PROOF_IMAGE_PHASH_SIMILAR",
-            "rules_version": "v1.0.0",
+            "reason_code": "PROOF_REUSED",
         },
     })
 
@@ -538,7 +516,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -21,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-D04",
@@ -546,8 +524,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "DUPLICATE",
-            "reason_code": "TRANSACTION_ALREADY_ALLOCATED",
-            "rules_version": "v1.0.0",
+            "reason_code": "TXN_ALREADY_ALLOCATED",
         },
     })
 
@@ -577,7 +554,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -11,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-N01",
@@ -585,8 +562,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "NEEDS_REVIEW",
-            "reason_code": "UNDERPAID_ORDER",
-            "rules_version": "v1.0.0",
+            "reason_code": "AMOUNT_UNDERPAID",
         },
     })
 
@@ -612,7 +588,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -13,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-N02",
@@ -620,8 +596,7 @@ def generate_manifest() -> dict:
         },
         "expected": {
             "outcome": "NEEDS_REVIEW",
-            "reason_code": "OVERPAYMENT_REVIEW_REQUIRED",
-            "rules_version": "v1.0.0",
+            "reason_code": "AMOUNT_OVERPAID",
         },
     })
 
@@ -647,7 +622,7 @@ def generate_manifest() -> dict:
             "receiver_name": MERCHANT_RECEIVER,
             "ledger_offset_min": -15,
             "status": "POSTED",
-            "trust_level": "DEMO_TRUSTED",
+            "trust_level": "SIMULATOR",
         },
         "order": {
             "external_order_ref": "ORD-N03",
@@ -656,7 +631,6 @@ def generate_manifest() -> dict:
         "expected": {
             "outcome": "NEEDS_REVIEW",
             "reason_code": "AMBIGUOUS_CANDIDATES",
-            "rules_version": "v1.0.0",
         },
     })
 
@@ -689,7 +663,7 @@ def generate_manifest() -> dict:
                 "receiver_name": MERCHANT_RECEIVER,
                 "ledger_offset_min": -11,
                 "status": "POSTED",
-                "trust_level": "DEMO_TRUSTED",
+                "trust_level": "SIMULATOR",
             },
             "order": {
                 "external_order_ref": f"ORD-{cid}",
@@ -697,9 +671,8 @@ def generate_manifest() -> dict:
             },
             "expected": {
                 "outcome": "NEEDS_REVIEW",
-                "reason_code": "INCOMPLETE_CLAIM_DATA",
-                "rules_version": "v1.0.0",
-            },
+                "reason_code": "LOW_EXTRACTION_CONFIDENCE",
+                },
         })
 
     # Master manifest structure

@@ -31,7 +31,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -12,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G01",
@@ -39,8 +39,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G01.jpg",
+        "sha256": "acdd1e5cf43da66df48d366e5351d0c94c73b7cd812ed5fa077507ccab48fe42",
+        "bytes": 113381
       }
     },
     {
@@ -64,7 +68,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -21,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G02",
@@ -72,8 +76,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "MATCH_WITH_FUZZY_SENDER",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G02.jpg",
+        "sha256": "a16c75cecbf8a795bcbc38811a6ba0a5fd60c6f945ccd08ed9cb37e1018beaa9",
+        "bytes": 117096
       }
     },
     {
@@ -97,7 +105,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -16,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G03",
@@ -105,8 +113,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G03.jpg",
+        "sha256": "506d0a90904c2fa872f9bae26b58607be6d2b7b573b44a96a7b2942262d77e38",
+        "bytes": 110976
       }
     },
     {
@@ -130,7 +142,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -21,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G04",
@@ -138,8 +150,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G04.jpg",
+        "sha256": "aebb509a8a6550105ddb60b8c583065ef7399c06df46da084bcba0680929e8f5",
+        "bytes": 114435
       }
     },
     {
@@ -163,7 +179,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -26,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G05",
@@ -171,8 +187,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "OVERPAYMENT_ACCEPTED",
-        "rules_version": "v1.0.0"
+        "reason_code": "AMOUNT_OVERPAID"
+      },
+      "images": {
+        "delivered": "images/G05.jpg",
+        "sha256": "ef7650d0f4e0765b15f82901bb60ff78797dc98195e9c654e8978edb66f31e36",
+        "bytes": 111996
       }
     },
     {
@@ -196,7 +216,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -31,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G06",
@@ -204,8 +224,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G06.jpg",
+        "sha256": "13468b73f370e8e879011fa016b1565838cd1aa072902ad36805259b7a8299c6",
+        "bytes": 112219
       }
     },
     {
@@ -229,7 +253,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -36,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G07",
@@ -237,8 +261,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G07.jpg",
+        "sha256": "bd0d8de0602acfe6aaa797d7f9bc6929501574e9807eb184f08a8e86ff315aea",
+        "bytes": 109664
       }
     },
     {
@@ -262,7 +290,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -41,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G08",
@@ -270,8 +298,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G08.jpg",
+        "sha256": "720d43e1fbc1ddebe0a58149668e7f89bc106d6f265d03097e88cd255f64f86f",
+        "bytes": 115100
       }
     },
     {
@@ -295,7 +327,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -46,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G09",
@@ -303,8 +335,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G09.jpg",
+        "sha256": "42aa6c81173600b8e4510b8cabb0362675eca073153531d31750ade5dfa3a400",
+        "bytes": 109820
       }
     },
     {
@@ -328,7 +364,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -51,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-G10",
@@ -336,8 +372,12 @@
       },
       "expected": {
         "outcome": "VERIFIED",
-        "reason_code": "EXACT_MATCH",
-        "rules_version": "v1.0.0"
+        "reason_code": "STRONG_FIELD_AGREEMENT"
+      },
+      "images": {
+        "delivered": "images/G10.jpg",
+        "sha256": "aca21c4063f8b8baf2842204cd6d4326a102e1b613e01a022b88dae3abc6458c",
+        "bytes": 110982
       }
     },
     {
@@ -360,8 +400,12 @@
       },
       "expected": {
         "outcome": "UNMATCHED",
-        "reason_code": "NO_MATCHING_TRANSACTION",
-        "rules_version": "v1.0.0"
+        "reason_code": "NO_CANDIDATES"
+      },
+      "images": {
+        "delivered": "images/U01.jpg",
+        "sha256": "ef26ff616fb7795e644b5d13aba2d615b08d53ce1aad9b75c0282e8be0000836",
+        "bytes": 113468
       }
     },
     {
@@ -385,7 +429,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -2,
         "status": "PENDING",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-U02",
@@ -393,8 +437,12 @@
       },
       "expected": {
         "outcome": "UNMATCHED",
-        "reason_code": "TRANSACTION_PENDING_SETTLEMENT",
-        "rules_version": "v1.0.0"
+        "reason_code": "NO_CANDIDATES"
+      },
+      "images": {
+        "delivered": "images/U02.jpg",
+        "sha256": "15950f932365e6e03e45ee2b0b3b97ee5cca389c8567672c786d7c72c5a69088",
+        "bytes": 113834
       }
     },
     {
@@ -417,8 +465,12 @@
       },
       "expected": {
         "outcome": "UNMATCHED",
-        "reason_code": "TRANSACTION_OUTSIDE_WINDOW",
-        "rules_version": "v1.0.0"
+        "reason_code": "TIMESTAMP_MISMATCH"
+      },
+      "images": {
+        "delivered": "images/U03.jpg",
+        "sha256": "f5a1f34841b93480eddfa28e3ab6e380eaf4066b195ccad4cc2edc234775fd1b",
+        "bytes": 111348
       }
     },
     {
@@ -441,8 +493,12 @@
       },
       "expected": {
         "outcome": "UNMATCHED",
-        "reason_code": "MISMATCHED_RECEIVER",
-        "rules_version": "v1.0.0"
+        "reason_code": "NAME_MISMATCH"
+      },
+      "images": {
+        "delivered": "images/U04.jpg",
+        "sha256": "5a7b0893e9e3408a7a6f9ca029ed90677e78d8f5c33176b4a671ee51a1488733",
+        "bytes": 118036
       }
     },
     {
@@ -467,7 +523,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-S01",
@@ -475,8 +531,12 @@
       },
       "expected": {
         "outcome": "SUSPICIOUS",
-        "reason_code": "CLAIMED_AMOUNT_INFLATED",
-        "rules_version": "v1.0.0"
+        "reason_code": "CLAIM_INFLATED"
+      },
+      "images": {
+        "delivered": "images/S01.jpg",
+        "sha256": "62e92ec60e8b5f990a6edbdc71631d70bdf7356d12b379f113c71e36c1e5ae91",
+        "bytes": 116975
       }
     },
     {
@@ -501,7 +561,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -16,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-S02",
@@ -509,8 +569,12 @@
       },
       "expected": {
         "outcome": "SUSPICIOUS",
-        "reason_code": "REFERENCE_ID_TAMPERED",
-        "rules_version": "v1.0.0"
+        "reason_code": "REFERENCE_MISMATCH"
+      },
+      "images": {
+        "delivered": "images/S02.jpg",
+        "sha256": "28a9fdf7d491cb34bb14a20c6fa1aeb8eb95f1ba519c14c2ca381aee8c817ea6",
+        "bytes": 115087
       }
     },
     {
@@ -535,7 +599,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-S03",
@@ -543,8 +607,12 @@
       },
       "expected": {
         "outcome": "SUSPICIOUS",
-        "reason_code": "CRITICAL_FIELD_CONFLICT",
-        "rules_version": "v1.0.0"
+        "reason_code": "FIELD_CONTRADICTS_MATCH"
+      },
+      "images": {
+        "delivered": "images/S03.jpg",
+        "sha256": "569be4cd6b767fa8affb477697b1e7fc3239a4c68d3edd730b2601993029fd37",
+        "bytes": 113167
       }
     },
     {
@@ -569,7 +637,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-S04",
@@ -577,8 +645,12 @@
       },
       "expected": {
         "outcome": "SUSPICIOUS",
-        "reason_code": "CRITICAL_FIELD_CONFLICT",
-        "rules_version": "v1.0.0"
+        "reason_code": "FIELD_CONTRADICTS_MATCH"
+      },
+      "images": {
+        "delivered": "images/S04.jpg",
+        "sha256": "5bded5daa447138f9ec783d340902450abbfc3982a86d8a5f347258363040be1",
+        "bytes": 113321
       }
     },
     {
@@ -603,7 +675,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-S05",
@@ -611,8 +683,12 @@
       },
       "expected": {
         "outcome": "SUSPICIOUS",
-        "reason_code": "CRITICAL_FIELD_CONFLICT",
-        "rules_version": "v1.0.0"
+        "reason_code": "FIELD_CONTRADICTS_MATCH"
+      },
+      "images": {
+        "delivered": "images/S05.jpg",
+        "sha256": "f6ab2c7f54071ab340958ed8c27e0ab50add2c2570c5f44ed83197cd6c8bb844",
+        "bytes": 99250
       }
     },
     {
@@ -637,7 +713,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-S06",
@@ -645,8 +721,12 @@
       },
       "expected": {
         "outcome": "SUSPICIOUS",
-        "reason_code": "CRITICAL_FIELD_CONFLICT",
-        "rules_version": "v1.0.0"
+        "reason_code": "FIELD_CONTRADICTS_MATCH"
+      },
+      "images": {
+        "delivered": "images/S06.jpg",
+        "sha256": "e9567b12cdcd400a60933d6837fd0485d5d5b7223d568ce70c7fadf86d994439",
+        "bytes": 113121
       }
     },
     {
@@ -670,7 +750,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -12,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-D01",
@@ -678,8 +758,12 @@
       },
       "expected": {
         "outcome": "DUPLICATE",
-        "reason_code": "TRANSACTION_ALREADY_ALLOCATED",
-        "rules_version": "v1.0.0"
+        "reason_code": "TXN_ALREADY_ALLOCATED"
+      },
+      "images": {
+        "delivered": "images/D01.jpg",
+        "sha256": "acdd1e5cf43da66df48d366e5351d0c94c73b7cd812ed5fa077507ccab48fe42",
+        "bytes": 113381
       }
     },
     {
@@ -703,7 +787,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -21,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-D02",
@@ -711,8 +795,12 @@
       },
       "expected": {
         "outcome": "DUPLICATE",
-        "reason_code": "PROOF_IMAGE_SHA256_REUSED",
-        "rules_version": "v1.0.0"
+        "reason_code": "PROOF_REUSED"
+      },
+      "images": {
+        "delivered": "images/D02.jpg",
+        "sha256": "a16c75cecbf8a795bcbc38811a6ba0a5fd60c6f945ccd08ed9cb37e1018beaa9",
+        "bytes": 117096
       }
     },
     {
@@ -736,7 +824,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -16,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-D03",
@@ -744,8 +832,12 @@
       },
       "expected": {
         "outcome": "DUPLICATE",
-        "reason_code": "PROOF_IMAGE_PHASH_SIMILAR",
-        "rules_version": "v1.0.0"
+        "reason_code": "PROOF_REUSED"
+      },
+      "images": {
+        "delivered": "images/D03.jpg",
+        "sha256": "d2be185ba2907fa1051f476b81fe96c1020ca1c587bed312682e355371e6f3c7",
+        "bytes": 113039
       }
     },
     {
@@ -769,7 +861,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -21,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-D04",
@@ -777,8 +869,12 @@
       },
       "expected": {
         "outcome": "DUPLICATE",
-        "reason_code": "TRANSACTION_ALREADY_ALLOCATED",
-        "rules_version": "v1.0.0"
+        "reason_code": "TXN_ALREADY_ALLOCATED"
+      },
+      "images": {
+        "delivered": "images/D04.jpg",
+        "sha256": "b180d035f9b5a4a73cb148172ffbe02596c7863396ce612acb41d59157cd9b99",
+        "bytes": 116513
       }
     },
     {
@@ -802,7 +898,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-N01",
@@ -810,8 +906,12 @@
       },
       "expected": {
         "outcome": "NEEDS_REVIEW",
-        "reason_code": "UNDERPAID_ORDER",
-        "rules_version": "v1.0.0"
+        "reason_code": "AMOUNT_UNDERPAID"
+      },
+      "images": {
+        "delivered": "images/N01.jpg",
+        "sha256": "3fa6e10f5bd7db34300c8922d7bf54eeafd133ba21899b10cc0a257f06d5bc23",
+        "bytes": 112912
       }
     },
     {
@@ -835,7 +935,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -13,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-N02",
@@ -843,8 +943,12 @@
       },
       "expected": {
         "outcome": "NEEDS_REVIEW",
-        "reason_code": "OVERPAYMENT_REVIEW_REQUIRED",
-        "rules_version": "v1.0.0"
+        "reason_code": "AMOUNT_OVERPAID"
+      },
+      "images": {
+        "delivered": "images/N02.jpg",
+        "sha256": "6085e5f69cd408bde1d12613deed9b849e4c9bd10337615a749f814c43c376e8",
+        "bytes": 114644
       }
     },
     {
@@ -868,7 +972,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -15,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-N03",
@@ -876,8 +980,12 @@
       },
       "expected": {
         "outcome": "NEEDS_REVIEW",
-        "reason_code": "AMBIGUOUS_CANDIDATES",
-        "rules_version": "v1.0.0"
+        "reason_code": "AMBIGUOUS_CANDIDATES"
+      },
+      "images": {
+        "delivered": "images/N03.jpg",
+        "sha256": "636d957098adb62621c0fe5b78400a7908665bd8d0cc71d9c6191ccbf378c710",
+        "bytes": 110204
       }
     },
     {
@@ -901,7 +1009,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-N04",
@@ -909,8 +1017,12 @@
       },
       "expected": {
         "outcome": "NEEDS_REVIEW",
-        "reason_code": "INCOMPLETE_CLAIM_DATA",
-        "rules_version": "v1.0.0"
+        "reason_code": "LOW_EXTRACTION_CONFIDENCE"
+      },
+      "images": {
+        "delivered": "images/N04.jpg",
+        "sha256": "e2f2129654cbcef22dbc0cda2c4751ef13cd80b41d7059edc0975aab7f767e10",
+        "bytes": 110340
       }
     },
     {
@@ -934,7 +1046,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-N05",
@@ -942,8 +1054,12 @@
       },
       "expected": {
         "outcome": "NEEDS_REVIEW",
-        "reason_code": "INCOMPLETE_CLAIM_DATA",
-        "rules_version": "v1.0.0"
+        "reason_code": "LOW_EXTRACTION_CONFIDENCE"
+      },
+      "images": {
+        "delivered": "images/N05.jpg",
+        "sha256": "c924cc74434a9b4be651d414e19e35a5d9997383664c4423c9bbdeca29466571",
+        "bytes": 109396
       }
     },
     {
@@ -967,7 +1083,7 @@
         "receiver_name": "Ali Traders",
         "ledger_offset_min": -11,
         "status": "POSTED",
-        "trust_level": "DEMO_TRUSTED"
+        "trust_level": "SIMULATOR"
       },
       "order": {
         "external_order_ref": "ORD-N06",
@@ -975,8 +1091,12 @@
       },
       "expected": {
         "outcome": "NEEDS_REVIEW",
-        "reason_code": "INCOMPLETE_CLAIM_DATA",
-        "rules_version": "v1.0.0"
+        "reason_code": "LOW_EXTRACTION_CONFIDENCE"
+      },
+      "images": {
+        "delivered": "images/N06.jpg",
+        "sha256": "0b5afc69aed60dda657aa8acfd9ed2026bd0cc7577b97473e2d2c265a9da9d01",
+        "bytes": 110447
       }
     }
   ]
