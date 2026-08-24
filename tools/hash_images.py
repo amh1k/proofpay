@@ -1,6 +1,7 @@
-import json
 import hashlib
+import json
 from pathlib import Path
+
 
 def main():
     root = Path('C:/fastapi/proofpay')

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from proofpay.core.models import PaymentClaim
 from proofpay.core.money import Money
-from proofpay.core.timex import ClaimedInstant, GRANULARITY_MINUTE, GRANULARITY_DAY
+from proofpay.core.timex import GRANULARITY_DAY, GRANULARITY_MINUTE, ClaimedInstant
 from proofpay.extraction.base import ReceiptExtractor
 
 
@@ -45,10 +45,10 @@ class OfflineStubExtractor(ReceiptExtractor):
         raw_ts = vis.get('raw_timestamp_text')
         if raw_ts:
             try:
-                dt = datetime.strptime(raw_ts, "%d %b %Y, %I:%M %p")
+                dt = datetime.strptime(raw_ts, "%d %b %Y, %I:%M %p")  # noqa: DTZ007
                 occ_at = ClaimedInstant.from_local(dt, granularity_s=GRANULARITY_MINUTE)
             except ValueError:
-                dt = datetime.strptime(raw_ts, "%d %b %Y")
+                dt = datetime.strptime(raw_ts, "%d %b %Y")  # noqa: DTZ007
                 occ_at = ClaimedInstant.from_local(dt, granularity_s=GRANULARITY_DAY)
 
         amt = None

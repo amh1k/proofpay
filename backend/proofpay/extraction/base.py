@@ -19,4 +19,3 @@ class ReceiptExtractor(ABC):
             PaymentClaim: Structured parsed fields. Unreadable fields MUST
                           be set to None. Do not hallucinate values.
         """
-        pass

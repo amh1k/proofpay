@@ -1359,6 +1359,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "bcrypt" },
+    { name = "dashscope" },
     { name = "fastapi" },
     { name = "jellyfish" },
     { name = "pillow" },
@@ -1397,6 +1398,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "bcrypt", specifier = ">=4.1" },
+    { name = "dashscope", specifier = ">=1.17" },
     { name = "dashscope", marker = "extra == 'qwen'", specifier = ">=1.17" },
     { name = "fastapi", specifier = ">=0.110" },
     { name = "jellyfish", specifier = ">=1.2.1" },
