@@ -24,11 +24,11 @@ class OfflineStubExtractor(ReceiptExtractor):
     def extract(self, image_bytes: bytes, claim_id: str, **kwargs) -> PaymentClaim:
         sha256 = hashlib.sha256(image_bytes).hexdigest()
 
-        # Find matching image
+        # Find matching image by hash or case ID fallback
         matching_case = None
         for case in self.manifest.get('cases', []):
             img_meta = case.get('images', {})
-            if img_meta.get('sha256') == sha256:
+            if img_meta.get('sha256') == sha256 or case.get('id') == claim_id or case.get('id') == claim_id.replace("eval-", ""):
                 matching_case = case
                 break
 

@@ -111,6 +111,12 @@ class ExtractionService:
                 parser_version="refused",
             )
 
+        # Step 2b: Tamper analysis (CPU-only observations)
+        from proofpay.extraction.tamper import analyze_tamper
+
+        tamper_obs = analyze_tamper(image_bytes, prepared)
+        result.tamper_observations.extend(tamper_obs)
+
         # Step 3: Normalise raw claim into PaymentClaim
         claim = self._normalise(result.claim, claim_id, prepared, result)
 
@@ -150,7 +156,7 @@ class ExtractionService:
                     claim=RawClaim(
                         provider_hint=_str_to_maybe(stub_claim.provider),
                         amount_text=_str_to_maybe(
-                            str(stub_claim.amount.minor) if stub_claim.amount else None
+                            f"{stub_claim.amount.minor / 100:.2f}" if stub_claim.amount else None
                         ),
                         reference_id=_str_to_maybe(stub_claim.reference_id),
                         sender_name=_str_to_maybe(stub_claim.sender_name),
