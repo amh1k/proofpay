@@ -56,10 +56,11 @@ not even Python.
 ```bash
 cd backend
 uv sync
+uv run alembic upgrade head
 ```
 
-That is the whole setup. It creates `.venv`, fetches Python 3.12 if needed, and installs the exact
-locked versions.
+That is the whole setup. It creates `.venv`, fetches Python 3.12 if needed, installs the exact
+locked versions, and brings the local database schema to the current migration head.
 
 ### 3. Check it works
 
@@ -81,11 +82,13 @@ Interactive API docs are at <http://127.0.0.1:8000/docs>.
 ```bash
 cd backend
 uv sync --frozen
+uv run alembic upgrade head
 ```
 
 `--frozen` installs the lockfile exactly and **fails loudly** if `pyproject.toml` and `uv.lock`
 disagree. That turns "someone forgot to commit the lock" into an obvious error instead of a
-mystery bug at 2am.
+mystery bug at 2am. Applying migrations after the sync is safe to repeat and ensures local schema
+changes are present before the application starts.
 
 ---
 

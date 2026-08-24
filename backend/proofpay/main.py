@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from proofpay import __version__
+from proofpay.api.deps import SessionDep
 from proofpay.api.errors import http_exception_handler, validation_exception_handler
 from proofpay.api.v1.router import router as api_router
 from proofpay.config import get_settings
+
+
+def database_readiness(session: SessionDep) -> dict[str, str]:
+    """Report readiness only after a database round-trip succeeds."""
+    try:
+        session.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="DATABASE_UNAVAILABLE: Database is unavailable",
+        ) from exc
+    return {"status": "ready", "database": "ok"}
 
 
 def create_app() -> FastAPI:
@@ -45,6 +60,13 @@ def create_app() -> FastAPI:
             "env": settings.env,
             "receipt_extractor": settings.effective_receipt_extractor(),
         }
+
+    app.add_api_route(
+        "/health/ready",
+        database_readiness,
+        methods=["GET"],
+        tags=["system"],
+    )
 
     return app
 
