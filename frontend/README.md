@@ -20,6 +20,16 @@ It runs with **no backend**. `VITE_USE_MOCKS` defaults to on, and the fixtures i
 `src/mocks/` were generated from the real verification engine, so all five
 verdicts are real engine output rather than hand-written JSON.
 
+The picker at the top of the upload screen means the same thing in both modes.
+`src/mocks/orders.json` is dumped from the backend's own order list, and every
+fixture in `src/mocks/verifications.json` is one of those same orders checked
+against its own committed receipt by the real engine. Choosing an order replays
+that order's own answer — the edited-amount order comes back SUSPICIOUS, about
+its own Rs 5,000, and no verdict on screen ever discusses a sum the picker did
+not offer. Regenerate all three mock files together with
+`cd ../backend && uv run python ../scripts/generate_api_mocks.py`; it refuses to
+write a set in which an order in the picker has no check behind it.
+
 ## Against the live API
 
 ```bash
@@ -46,7 +56,8 @@ it, mocks included, so a screen that renders one renders the other.
 |---|---|
 | `?present=1` | Raises the type for a projector. Use this, **not** browser zoom: zoom shrinks the CSS viewport and can trip the phone breakpoint live on stage. |
 | **Start over** / `Esc` | Always reachable, in the top strip. Cancels whatever is in flight, clears the used-payment memory, returns a clean upload screen. |
-| The demo rail | Three buttons on the upload screen go straight to a real verdict, so a demo never depends on a file picker or on venue wifi. |
+| The order picker | Top of the upload screen, above the drop target: choose the order first, then hand over the proof. The chosen one is filled white; the rest are outlines. Arrow keys move between them. "Check this payment" stays unavailable until both an order and a screenshot are in hand. |
+| The demo rail | Three buttons at the bottom of the upload screen go straight to a real verdict without an order or a file, so a demo never depends on a file picker or on venue wifi. |
 
 ## Where things live
 
