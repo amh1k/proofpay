@@ -12,8 +12,11 @@
  *                        sum, and a sum on a verdict screen reads as a tick.
  *   received unknown     the claimed figure and a dashed, empty slot
  *
- * DUPLICATE and NEEDS_REVIEW do not use this at all: on those screens there is
- * nothing to oppose, so they have their own blocks.
+ * DUPLICATE never uses this: the two amounts agree by definition there, and the
+ * fact worth showing is which earlier order spent the payment. NEEDS_REVIEW uses
+ * it only when the engine DID name a transaction — one payment that fell short
+ * of the order. When it named none, two candidates matched equally well and
+ * `CandidatePair` renders that refusal instead.
  */
 
 import type { ReactElement } from 'react'

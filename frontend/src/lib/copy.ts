@@ -28,6 +28,24 @@ export const UPLOAD_HINT = 'or paste it, or pick one of the examples below'
 export const UPLOAD_META =
   'Your provider SMS is already in ProofPay. The screenshot is only the claim.'
 
+/* ── choosing the order ─────────────────────────────────────────────────────
+ * A screenshot is never checked on its own — it is checked AGAINST an order, and
+ * the merchant is the only one who knows which. These three lines are the whole
+ * of that conversation. Rule 1 applies here too: they talk about the order and
+ * the money, never about the customer.
+ *
+ * Rendered through the `cap` class, which uppercases; they are written lower-case
+ * in source to match the other captions on that screen. */
+
+/** The caption above the picker. It is a question because it is asking for one. */
+export const ORDER_PICKER_HINT = 'which order is this payment for?'
+
+/** Why "Check this payment" is not available yet. Says what to do, not what is wrong. */
+export const ORDER_REQUIRED = 'choose the order above first'
+
+/** Nothing to pick. Says what WE know, in the register of rule 2. */
+export const ORDER_NONE = 'no orders are waiting for a payment right now'
+
 export const CHECKING_TITLE = 'Checking against the payments that arrived'
 
 /** The bottom nav strip. Counts come from `DashboardSummary`. */
