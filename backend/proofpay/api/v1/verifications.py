@@ -1,13 +1,27 @@
-"""Verification contract routes backed by deterministic examples."""
+"""Verification routes connecting uploads to the real decision engine."""
 
 from __future__ import annotations
 
+import hashlib
+import json
+from dataclasses import replace
+from datetime import UTC
+from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 
 from proofpay.api.errors import ERROR_RESPONSES
+from proofpay.api.verification_mapper import verification_result_from_decision
+from proofpay.config import get_settings
+from proofpay.core.decide import DecisionPolicy, decide
+from proofpay.demo.clock import PINNED_ANCHOR
+from proofpay.extraction.errors import ExtractionError
+from proofpay.extraction.service import ExtractionService
 
+from ..engine_demo import demo_case_for
 from .auth import CurrentPrincipal, DemoPrincipal, require_roles
 from .idempotency import find_existing, request_fingerprint, store_response
 from .schemas import (
@@ -17,11 +31,12 @@ from .schemas import (
     VerificationResult,
     VerificationStatus,
 )
-from .stub_data import DEMO_VERIFICATION, STUB_HISTORY, verification_by_id
+from .stub_data import STUB_HISTORY, verification_by_id
 
 router = APIRouter(prefix="/verifications", tags=["verifications"], responses=ERROR_RESPONSES)
 _ALLOWED_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+_FIXTURE_MANIFEST = Path(__file__).resolve().parents[4] / "fixtures" / "demo" / "manifest.json"
 SubmitPrincipal = Annotated[
     DemoPrincipal,
     Depends(
@@ -34,8 +49,63 @@ SubmitPrincipal = Annotated[
 ]
 
 
-def _submitted_verification(order_id: str) -> VerificationResult:
-    return DEMO_VERIFICATION.model_copy(update={"order_id": order_id})
+@lru_cache(maxsize=1)
+def _fixture_case_ids() -> dict[str, str]:
+    """Index raw fixture hashes for the deterministic extractor path."""
+    payload = json.loads(_FIXTURE_MANIFEST.read_text(encoding="utf-8"))
+    return {
+        case["images"]["sha256"]: case["id"]
+        for case in payload["cases"]
+        if case.get("images", {}).get("sha256") and case.get("id")
+    }
+
+
+@lru_cache(maxsize=1)
+def _extraction_service() -> ExtractionService:
+    settings = get_settings()
+    mode = "cloud" if settings.effective_receipt_extractor() == "qwen" else "offline"
+    return ExtractionService(api_key=settings.dashscope_api_key, mode=mode)
+
+
+def _extract_claim(content: bytes, *, verification_id: str, merchant_id: str):
+    """Extract a claim while keeping fixture lookup tied to the uploaded bytes."""
+    settings = get_settings()
+    if settings.effective_receipt_extractor() == "deterministic":
+        fixture_case_id = _fixture_case_ids().get(hashlib.sha256(content).hexdigest())
+        if fixture_case_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    "The deterministic extractor only accepts committed synthetic demo fixtures"
+                ),
+            )
+        extractor_claim_id = fixture_case_id
+    else:
+        extractor_claim_id = verification_id
+
+    try:
+        extracted = _extraction_service().extract(content, claim_id=extractor_claim_id)
+    except (ExtractionError, OSError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="The screenshot could not be read as a payment proof",
+        ) from exc
+
+    # The current offline adapter already knows the receipt time, while the
+    # legacy high-level normalizer does not yet copy that field into its
+    # RawClaim bridge. Recover it from the same deterministic extractor until
+    # the extraction track updates that bridge; a missing time can otherwise
+    # incorrectly downgrade an otherwise exact match to review.
+    if settings.effective_receipt_extractor() == "deterministic" and extracted.occurred_at is None:
+        fixture_claim = _extraction_service().extractor.extract(content, extractor_claim_id)
+        extracted = replace(extracted, occurred_at=fixture_claim.occurred_at)
+
+    return replace(
+        extracted,
+        claim_id=verification_id,
+        merchant_id=merchant_id,
+        proof_id=verification_id,
+    )
 
 
 def _assert_order_scope(order_id: str, principal: DemoPrincipal) -> None:
@@ -66,8 +136,9 @@ async def _submit_verification(
     principal: SubmitPrincipal,
     client_resized: Annotated[str | None, Header(alias="X-Client-Resized")] = None,
 ) -> VerificationResult:
-    """Return the stable result shape while persistence is being built."""
+    """Run extraction and the real decision engine for one demo verification."""
     _assert_order_scope(order_id, principal)
+    demo_case = demo_case_for(order_id, principal.merchant_id)
     if screenshot.content_type not in _ALLOWED_MEDIA_TYPES:
         raise HTTPException(status_code=415, detail="Only JPEG, PNG, and WebP images are accepted")
 
@@ -80,7 +151,29 @@ async def _submit_verification(
     if existing is not None:
         return existing
 
-    result = _submitted_verification(order_id)
+    verification_id = f"verification_{uuid4().hex}"
+    claim = _extract_claim(
+        content,
+        verification_id=verification_id,
+        merchant_id=principal.merchant_id,
+    )
+    evaluated_at = PINNED_ANCHOR.astimezone(UTC)
+    decision = decide(
+        claim,
+        demo_case.order,
+        demo_case.ledger,
+        demo_case.allocations,
+        now=evaluated_at,
+        policy=DecisionPolicy(),
+    )
+    result = verification_result_from_decision(
+        decision,
+        claim=claim,
+        order=demo_case.order,
+        ledger=demo_case.ledger,
+        verification_id=verification_id,
+        created_at=evaluated_at,
+    )
     store_response(principal.merchant_id, idempotency_key, fingerprint, result)
     return result
 
@@ -94,7 +187,7 @@ router.add_api_route(
     summary="Submit a payment proof",
     description=(
         "Accepts a multipart screenshot and an Idempotency-Key. "
-        "The current implementation returns deterministic demo data."
+        "The screenshot is extracted and evaluated by the versioned decision engine."
     ),
 )
 

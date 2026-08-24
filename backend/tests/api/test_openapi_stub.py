@@ -1,8 +1,13 @@
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
 from proofpay.api.v1.stub_data import DEMO_VERIFICATIONS
 from proofpay.core.reasons import ReasonCode
 from proofpay.main import create_app
+
+FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "demo" / "images"
 
 
 def client() -> TestClient:
@@ -15,6 +20,11 @@ def auth(token: str = "stub-access-token") -> dict[str, str]:
 
 def upload_headers(key: str = "verification-test-1") -> dict[str, str]:
     return {**auth(), "Idempotency-Key": key}
+
+
+def fixture(name: str) -> tuple[str, bytes, str]:
+    path = FIXTURES / name
+    return (name, path.read_bytes(), "image/jpeg")
 
 
 def test_openapi_exposes_frontend_contract() -> None:
@@ -39,28 +49,45 @@ def test_openapi_exposes_frontend_contract() -> None:
     )
 
 
-def test_create_verification_returns_decision_contract() -> None:
+@pytest.mark.parametrize(
+    ("order_id", "image", "expected_status", "expected_rule"),
+    [
+        ("order_demo_1001", "G01.jpg", "VERIFIED", "R090"),
+        ("order_demo_1002", "S01.jpg", "SUSPICIOUS", "R030"),
+        ("order_demo_1003", "D01.jpg", "DUPLICATE", "R020"),
+        ("order_demo_1004", "N01.jpg", "NEEDS_REVIEW", "R070"),
+        ("order_demo_1005", "U01.jpg", "UNMATCHED", "R010"),
+    ],
+)
+def test_create_verification_runs_real_engine(
+    order_id: str,
+    image: str,
+    expected_status: str,
+    expected_rule: str,
+) -> None:
     response = client().post(
         "/api/v1/verifications",
-        data={"order_id": "order_demo_1001"},
-        files={"screenshot": ("payment.png", b"stub-image", "image/png")},
-        headers=upload_headers(),
+        data={"order_id": order_id},
+        files={"screenshot": fixture(image)},
+        headers=upload_headers(f"engine-{order_id}"),
     )
 
     assert response.status_code == 201
     body = response.json()
-    assert body["status"] == "VERIFIED"
+    assert body["status"] == expected_status
     assert body["stage"] == "COMPLETE"
-    assert body["matched_txn_id"] == "txn_demo_1001"
+    assert body["fired_rule_id"] == expected_rule
     assert body["summary"]
-    assert body["matched_transaction"]["masked_reference"] == "TX••••01"
-    assert body["evidence"][0]["claimed_value"] == "TX1001"
-    assert {item["field"] for item in body["evidence"]} >= {
-        "reference_id",
-        "amount",
-        "sender_name",
-        "timestamp",
-    }
+    assert body["claim"]["proof_id"].startswith("verification_")
+    if expected_status == "UNMATCHED":
+        assert body["evidence"] == []
+    else:
+        assert {item["field"] for item in body["evidence"]} >= {
+            "reference",
+            "amount",
+            "sender_name",
+            "timestamp",
+        }
 
 
 def test_demo_decisions_match_engine_rule_ids_and_reason_types() -> None:
@@ -81,7 +108,7 @@ def test_claims_route_is_available_as_deprecated_alias() -> None:
     response = client().post(
         "/api/v1/claims",
         data={"order_id": "order_demo_1001"},
-        files={"screenshot": ("payment.png", b"stub-image", "image/png")},
+        files={"screenshot": fixture("G01.jpg")},
         headers=upload_headers("claim-test-1"),
     )
 
@@ -136,14 +163,14 @@ def test_idempotency_replays_same_request_and_rejects_conflict() -> None:
     app_client = client()
     headers = upload_headers("same-key")
     payload = {"order_id": "order_demo_1001"}
-    files = {"screenshot": ("payment.png", b"first-image", "image/png")}
+    files = {"screenshot": fixture("G01.jpg")}
 
     first = app_client.post("/api/v1/verifications", data=payload, files=files, headers=headers)
     replay = app_client.post("/api/v1/verifications", data=payload, files=files, headers=headers)
     conflict = app_client.post(
         "/api/v1/verifications",
         data=payload,
-        files={"screenshot": ("payment.png", b"different-image", "image/png")},
+        files={"screenshot": fixture("S01.jpg")},
         headers=headers,
     )
 
