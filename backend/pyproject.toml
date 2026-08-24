@@ -65,22 +65,4 @@ ignore = ["FURB157"]
 # DTZ stays enabled for `proofpay/`, where it correctly reports nothing.
 "tests/**" = ["DTZ001"]
 
-# --- TEMPORARY -------------------------------------------------------------
-# Lint debt that existed when CI was introduced, recorded here rather than
-# silently excluded so it stays visible and deletable. These are all in Track C
-# files (see issue #3) and are being cleared by their owner; nobody else should
-# add entries here. Delete each line as it is fixed, and this whole block with
-# the last one.
-#
-# `F841 rng is assigned but never used` in build_manifest.py is NOT cosmetic:
-# the variable is a seeded Random(42) described as "for absolute determinism".
-# Either the seeding is not applied or it is dead code. Flagged on issue #3.
-"proofpay/demo/clock.py"       = ["UP017"]
-"tests/test_clock.py"          = ["F401", "UP017"]
-"tests/test_images.py"         = ["I001"]
-"tests/test_manifest.py"       = ["C401"]
-"tests/test_pk_data.py"        = ["I001"]
-# `tools/` sits outside this project root, so per-file-ignores cannot reach it.
-# CI therefore lints `proofpay` and `tests` only, and `tools/` is added to the CI
-# lint step once Track C clears its 18 findings (issue #3).
-# --- END TEMPORARY ---------------------------------------------------------
+

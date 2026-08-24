@@ -59,7 +59,8 @@ class TestManifestCaseIntegrity:
 
     def test_unique_case_ids(self, manifest_data):
         ids = [c["id"] for c in manifest_data["cases"]]
-        assert len(ids) == len(set(ids)), f"Duplicate IDs found: {set(x for x in ids if ids.count(x) > 1)}"
+        duplicates = {x for x in ids if ids.count(x) > 1}
+        assert len(ids) == len(set(ids)), f"Duplicate IDs found: {duplicates}"
 
     def test_required_keys_present(self, manifest_data):
         required_keys = {"id", "title", "category", "visible", "order", "expected"}

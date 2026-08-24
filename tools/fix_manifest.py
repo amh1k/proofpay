@@ -1,6 +1,8 @@
+from pathlib import Path
 
-path = 'C:/fastapi/proofpay/tools/build_manifest.py'
-content = open(path, encoding='utf-8').read()
+path = Path(__file__).resolve().parent / "build_manifest.py"
+with open(path, encoding="utf-8") as f:
+    content = f.read()
 
 replacements = {
     '"EXACT_MATCH"': '"STRONG_FIELD_AGREEMENT"',
@@ -22,10 +24,11 @@ replacements = {
     '"trust_level": "DEMO_TRUSTED"': '"trust_level": "SIMULATOR"',
     '            "rules_version": "v1.0.0",\n': '',
     '            "rules_version": "v1.0.0"\n': '',
-    '    rng = random.Random(42)  # Seeded for absolute determinism\n': ''
+    '    rng = random.Random(42)  # Seeded for absolute determinism\n': '',
 }
 
 for old, new in replacements.items():
     content = content.replace(old, new)
 
-open(path, 'w', encoding='utf-8').write(content)
+with open(path, "w", encoding="utf-8") as f:
+    f.write(content)

@@ -34,7 +34,6 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from pk_data import (
     demo_txn_ref,
-    pk_iban,
 )
 
 
@@ -45,7 +44,6 @@ def generate_manifest() -> dict:
 
     # Common receiver for all demo transactions
     MERCHANT_RECEIVER = "Ali Traders"
-    MERCHANT_IBAN = pk_iban("SBZP", "009988776655")
 
     # ═════════════════════════════════════════════════════════════════
     # 1. VERIFIED CASES (G01–G10) — 10 Clean & Normal Variations

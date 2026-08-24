@@ -63,7 +63,7 @@ def inject_double_compression(img: Image.Image, region: tuple[int, int, int, int
     """Simulate editing an already-compressed JPEG and re-saving it.
     This creates localized Error Level Analysis (ELA) hotspots.
     """
-    x1, y1, x2, y2 = region
+    _x1, _y1, _x2, _y2 = region
     box = img.crop(region)
     
     # Compress JUST the box horribly, then paste it back
@@ -82,7 +82,7 @@ def tamper_suspicious_case(img: Image.Image, case_id: str, tamper_type: str) -> 
     if img.mode == "RGBA":
         img = img.convert("RGB")
         
-    width, height = img.size
+    width, _height = img.size
     
     if tamper_type == "amount_edit":
         # Amount is typically in the top third, horizontally centered-ish

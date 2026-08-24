@@ -9,8 +9,7 @@ These tests verify that:
     unset (pinned), "today", and explicit ISO-8601
 """
 
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -105,7 +104,7 @@ class TestToUtc:
         utc = to_utc(PINNED_ANCHOR)
         assert utc.hour == 9
         assert utc.minute == 5
-        assert utc.tzinfo == timezone.utc
+        assert utc.tzinfo == UTC
 
     def test_rejects_naive_datetime(self):
         """A datetime without timezone info must raise ValueError."""
@@ -116,6 +115,6 @@ class TestToUtc:
         """Any aware datetime should convert without error."""
         aware = datetime(2026, 6, 15, 18, 30, 0, tzinfo=PKT)
         result = to_utc(aware)
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
         assert result.hour == 13  # 18:30 PKT = 13:30 UTC
         assert result.minute == 30

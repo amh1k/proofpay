@@ -33,7 +33,6 @@ from pk_data import (
     random_msisdn,
 )
 
-
 # ── Deterministic ID generation ──────────────────────────────────
 
 

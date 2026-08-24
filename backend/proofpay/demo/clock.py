@@ -30,7 +30,7 @@ IMPORTANT:
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 # Pakistan Standard Time — UTC+05:00, no DST (the one easy timezone)
@@ -113,4 +113,4 @@ def to_utc(dt: datetime) -> datetime:
     """
     if dt.tzinfo is None:
         raise ValueError("Cannot convert naive datetime to UTC — set tzinfo first")
-    return dt.astimezone(timezone.utc)
+    return dt.astimezone(UTC)
