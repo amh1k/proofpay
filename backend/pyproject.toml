@@ -21,6 +21,8 @@ dependencies = [
     "rapidfuzz>=3.6",
     "jellyfish>=1.2.1",
     "tzdata>=2026.3",
+    "dashscope>=1.17",
+    "imagehash>=4.3.2",
 ]
 
 [project.optional-dependencies]

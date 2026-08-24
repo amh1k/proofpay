@@ -18,8 +18,8 @@ WHY THIS FILE EXISTS:
 
 import json
 from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFilter
-import random
 
 # ── Paths ──────────────────────────────────────────────────────────
 REPO_ROOT = Path(__file__).resolve().parents[1]
