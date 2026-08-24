@@ -16,6 +16,23 @@ router = APIRouter(prefix="/auth", tags=["auth"], responses=ERROR_RESPONSES)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 
+# ── The verifier's beat ───────────────────────────────────────────
+# A VERIFIER (the rider) is assigned individual orders; every other role sees
+# the merchant's whole book.  This set is the assignment.
+#
+# DELIBERATE: it stays at one order even now that /orders offers five.  The
+# temptation when the picker landed was to widen it to all five so that "the
+# picker works for everybody", but the rider seeing exactly one of five orders
+# is not a gap — it is the only place in the demo where the role boundary is
+# visible at all.  Widen this and GET /orders returns the same five rows for
+# every role, `_assert_order_scope` in verifications.py can never fire, and the
+# 403 we tell reviewers about becomes unreachable.  The frontend signs in as
+# "owner" (MERCHANT_ADMIN, see `_principal_for_username`), which is neither
+# REVIEWER nor VERIFIER, so it already reaches all five; nothing about the
+# picker needs this widened.
+DEMO_VERIFIER_ORDER_IDS: frozenset[str] = frozenset({"order_demo_1001"})
+
+
 @dataclass(frozen=True, slots=True)
 class DemoPrincipal:
     user_id: str
@@ -23,7 +40,7 @@ class DemoPrincipal:
     display_name: str
     role: MembershipRole
     scopes: tuple[str, ...]
-    assigned_order_ids: frozenset[str] = frozenset({"order_demo_1001"})
+    assigned_order_ids: frozenset[str] = DEMO_VERIFIER_ORDER_IDS
 
 
 _PRINCIPALS: dict[str, DemoPrincipal] = {
@@ -56,6 +73,12 @@ _PRINCIPALS: dict[str, DemoPrincipal] = {
         scopes=("claims:read", "reviews:read", "reviews:write"),
     ),
 }
+
+
+# The single VERIFIER in the demo.  `stub_data` projects this principal's name
+# onto the orders it is assigned to, so what the screen calls the assigned
+# verifier and what the 403 boundary actually enforces cannot disagree.
+DEMO_VERIFIER = _PRINCIPALS["stub-access-token:rider"]
 
 
 def _principal_for_username(username: str) -> DemoPrincipal:

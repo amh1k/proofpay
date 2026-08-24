@@ -1,11 +1,36 @@
-"""Deterministic example data used until persistence is implemented."""
+"""Deterministic example data used until persistence is implemented.
+
+TWO KINDS OF DATA LIVE HERE, AND THEY HAVE DIFFERENT RULES:
+
+  1. The ORDER ROWS served by GET /orders are *derived*, not written.  They are
+     projected out of `proofpay.api.engine_demo`, which is the module the real
+     decision engine is actually handed when a screenshot arrives.  See
+     `_order_view` below for why they are not simply typed out again.
+
+  2. Everything else (the example transaction, claim, evidence and the five
+     history rows) is still hand-written illustration.  It is never evaluated
+     by the engine — it exists so the history and dashboard screens have
+     something to show before any real check has been run.
+
+WHY THERE ARE TWO CLOCKS IN THIS FILE:
+    `_time()` below pins the illustrative rows to 2026-08-23.  The derived
+    order rows carry engine_demo's timestamps instead, which are offsets from
+    `demo.clock.PINNED_ANCHOR` (2026-08-20 14:05 PKT).  That mismatch is the
+    price of deriving: an order's created_at must be the one the engine
+    compares receipt timestamps against, not a second date invented here that
+    happens to look tidier next to the history rows.  Do not "fix" it by
+    re-stamping the derived rows with `_time()` — that reintroduces exactly the
+    drift the derivation exists to prevent.
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from proofpay.api.engine_demo import DemoEngineCase, demo_cases
 from proofpay.core.reasons import ReasonCode
 
+from .auth import DEMO_VERIFIER
 from .schemas import (
     DashboardSummary,
     EvidenceAgreement,
@@ -40,15 +65,99 @@ DEMO_TRANSACTION = TransactionView(
     source="DEMO",
 )
 
-DEMO_ORDER = OrderView(
-    id="order_demo_1001",
-    external_order_ref="ORD-1001",
-    expected_amount_minor=200_000,
-    currency="PKR",
-    status="PAYMENT_REVIEW",
-    assigned_verifier_name="Ali Khan",
-    created_at=_time(11, 30),
-)
+# Every demo order is waiting for its payment to be checked — that is the whole
+# reason it is in the picker.  The status is therefore the same on all five, and
+# deliberately so: a per-order status like "DISPUTED" or "PAID" would announce
+# the verdict on the button before the merchant has uploaded anything, and the
+# demo's entire point is that the answer comes out of the engine, not out of a
+# label someone typed next to the order.
+_ORDER_STATUS = "PAYMENT_REVIEW"
+
+
+def _order_view(case: DemoEngineCase) -> OrderView:
+    """Project one engine case into the order row the merchant picks from.
+
+        engine_demo._CASES  ──derive──>  STUB_ORDERS  ──GET /orders──>  picker
+                │                                                         │
+                └────────────── POST /verifications ──────────────────────┘
+                        (the same case, evaluated for real)
+
+    The picker and the verdict must be talking about the same order.  Typing
+    the five orders out again here would let the two halves drift apart on the
+    only two fields the merchant can actually read — the reference and the
+    expected amount — and the failure would surface on stage: a button labelled
+    "ORD-S01 · Rs 5,000" whose verdict then explains that Rs 500 was expected.
+    Deriving makes that class of bug unrepresentable.
+
+    The projection lives here, not in `engine_demo`, because there is no import
+    cycle to dodge (engine_demo imports only the frozen core and the clock) and
+    the direction that keeps engine_demo free of Pydantic and of API schemas is
+    the better one: the engine's demo inputs should not have to know that an
+    HTTP contract exists.
+
+    The two guards below are not defensive noise.  `OrderView.external_order_ref`
+    and `.expected_amount_minor` are required, while `core.models.Order` allows
+    both to be None (a proof can legitimately arrive with no order attached).  A
+    case added without them would otherwise fail as an opaque Pydantic error at
+    import time, taking the whole app down with a message that names a field
+    rather than the case that is missing it.
+    """
+    order = case.order
+    if order.expected is None or order.reference is None:
+        raise ValueError(
+            f"demo case {order.order_id!r} cannot be shown to a merchant: an order in the "
+            "picker needs both a reference and an expected amount"
+        )
+    if order.created_at is None:
+        raise ValueError(f"demo case {order.order_id!r} has no created_at to show")
+
+    return OrderView(
+        id=order.order_id,
+        external_order_ref=order.reference,
+        expected_amount_minor=order.expected.minor,
+        currency=order.expected.currency,
+        status=_ORDER_STATUS,
+        # Only the orders the VERIFIER can actually reach carry a verifier's
+        # name.  Naming a rider on an order they would get a 404 for would put a
+        # falsehood on screen, and the name is read from the principal itself so
+        # the label and the role boundary cannot fall out of step.
+        assigned_verifier_name=(
+            DEMO_VERIFIER.display_name
+            if order.order_id in DEMO_VERIFIER.assigned_order_ids
+            else None
+        ),
+        created_at=order.created_at,
+    )
+
+
+# Order preserved exactly as engine_demo declares it; see the presentation-order
+# comment there.  The frontend renders these as a row of buttons, so the index
+# of each order has to be the same on every run and on every machine.
+STUB_ORDERS = [_order_view(case) for case in demo_cases()]
+
+
+def _demo_order(order_id: str) -> OrderView:
+    """Return the one derived order the illustrative rows below hang off.
+
+    By id, and deliberately not `STUB_ORDERS[0]`.  The presentation-order
+    comment in `engine_demo` explicitly invites reordering the cases, and an
+    index would follow that silently: move `order_demo_1002` to the front and
+    the Rs 2,000 easypaisa illustration below, plus the history row the rider is
+    allowed to see, would quietly re-attach themselves to the edited-amount
+    order.  Nothing would fail; the screens would just start describing a
+    different order.  A lookup says which order is meant, and says it loudly
+    when that order is gone.
+    """
+    for order in STUB_ORDERS:
+        if order.id == order_id:
+            return order
+    raise ValueError(
+        f"{order_id!r} is no longer a demo case, so the example claim, evidence and "
+        "history rows below have nothing to hang off"
+    )
+
+
+DEMO_ORDER = _demo_order("order_demo_1001")
 
 DEMO_CLAIM = PaymentClaimView(
     proof_id="proof_demo_1001",
@@ -240,7 +349,8 @@ STUB_DASHBOARD = DashboardSummary(
     verified_amount_minor=7_450_000,
 )
 
-STUB_ORDERS = [DEMO_ORDER]
+# STUB_ORDERS is defined near the top of this module, not here beside its
+# sibling, because DEMO_VERIFICATION above needs DEMO_ORDER to exist first.
 STUB_TRANSACTIONS = [DEMO_TRANSACTION]
 
 
