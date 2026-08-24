@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 # Add backend to path so proofpay imports work when run from repo root
-REPO_ROOT = Path(__file__).parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = REPO_ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
@@ -58,9 +58,7 @@ def evaluate_extraction(mode: str = "auto") -> dict[str, Any]:
 
     for case in cases:
         case_id = case["id"]
-        rel_img = case.get("images", {}).get("delivered")
-        if not rel_img:
-            continue
+        rel_img = case.get("images", {}).get("delivered") if case.get("images") else f"images/{case_id}.jpg"
 
         img_path = REPO_ROOT / "fixtures" / "demo" / rel_img
         if not img_path.exists():
