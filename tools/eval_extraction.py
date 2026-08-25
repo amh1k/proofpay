@@ -163,11 +163,19 @@ def _write_report(results: dict[str, dict[str, int]], mode: str) -> None:
     ])
 
     report_content = "\n".join(lines)
-    REPORT_OUTPUT_PATH.write_text(report_content, encoding="utf-8")
+    # newline="\n": `write_text` uses the platform default, which on Windows
+    # rewrites all 15 line endings to CRLF and reports the whole committed
+    # report as modified even when every number is unchanged.
+    REPORT_OUTPUT_PATH.write_text(report_content, encoding="utf-8", newline="\n")
     print(f"\n{report_content}\n")
     print(f"Report saved to {REPORT_OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
-    mode_arg = sys.argv[1] if len(sys.argv) > 1 else "auto"
+    # Defaults to "offline", not "auto", because this writes a COMMITTED file.
+    # With no API key present "auto" produces byte-identical accuracy numbers
+    # but stamps `Mode: auto` in the header, so running the tool to check the
+    # report silently dirties the working tree and makes it look as though
+    # something regressed. Ask for "auto" or "cloud" explicitly to hit Qwen-VL.
+    mode_arg = sys.argv[1] if len(sys.argv) > 1 else "offline"
     evaluate_extraction(mode_arg)

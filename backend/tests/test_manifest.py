@@ -12,6 +12,9 @@ These tests verify that:
   - Every case has unique IDs (G01..G10, U01..U04, S01..S06, D01..D04, N01..N06)
   - Every case has required schema fields (id, title, category, visible, order, expected)
   - Money amounts are integer paisa values (no floats)
+  - Every case carries a list of ledger rows and a list of allocations
+  - Each allocation joins to exactly one row in its own case's ledger, and
+    names an order other than the one under verification
 """
 
 import json
@@ -21,6 +24,18 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST_PATH = REPO_ROOT / "fixtures" / "demo" / "manifest.json"
+
+# The fixed shape of one merchant-feed row.
+LEDGER_ROW_KEYS = {
+    "rail",
+    "amount_paisa",
+    "external_transaction_id",
+    "sender_name",
+    "receiver_name",
+    "ledger_offset_min",
+    "status",
+    "trust_level",
+}
 
 
 @pytest.fixture(scope="module")
@@ -78,12 +93,101 @@ class TestManifestCaseIntegrity:
             ord_info = case["order"]
             assert isinstance(ord_info["expected_amount_paisa"], int), f"Case {case['id']} order amount not int"
 
-            led = case.get("ledger")
-            if led and led.get("amount_paisa") is not None:
-                assert isinstance(led["amount_paisa"], int), f"Case {case['id']} ledger amount not int"
+            for row in case.get("ledger") or ():
+                if row.get("amount_paisa") is not None:
+                    assert isinstance(row["amount_paisa"], int), f"Case {case['id']} ledger amount not int"
 
     def test_expected_outcomes_match_categories(self, manifest_data):
         """case['category'] must equal case['expected']['outcome']."""
         for case in manifest_data["cases"]:
             assert case["category"] == case["expected"]["outcome"], \
                 f"Case {case['id']} category {case['category']} != outcome {case['expected']['outcome']}"
+
+
+class TestLedgerAndAllocationSchema:
+    """Validate the multi-row ledger and the allocation join.
+
+    These guards exist because every failure they catch is SILENT. A malformed
+    allocation does not crash the engine — it simply fails to fire the duplicate
+    rule, and the case reports VERIFIED, which is the exact outcome the fixture
+    was written to prove impossible. A green suite with a broken join would be
+    worse than a red one.
+    """
+
+    def test_ledger_is_always_a_list(self, manifest_data):
+        """A case can carry more than one feed row (N03 carries two).
+
+        Empty list, never null: it deletes a null branch from every consumer
+        instead of adding one.
+        """
+        for case in manifest_data["cases"]:
+            assert isinstance(case["ledger"], list), \
+                f"Case {case['id']} ledger is {type(case['ledger']).__name__}, not a list"
+            for row in case["ledger"]:
+                assert isinstance(row, dict), f"Case {case['id']} has a non-object ledger row"
+                missing = LEDGER_ROW_KEYS - set(row.keys())
+                assert not missing, f"Case {case['id']} ledger row missing keys: {missing}"
+
+    def test_transaction_ids_are_unique_within_a_case(self, manifest_data):
+        """A feed cannot carry one transaction id twice.
+
+        The engine's TxnIndex.build raises on a repeated id, but its message
+        names neither the case nor the manifest, so catch it here where the
+        failure can say which fixture is wrong.
+        """
+        for case in manifest_data["cases"]:
+            refs = [row["external_transaction_id"] for row in case["ledger"]]
+            duplicates = {r for r in refs if refs.count(r) > 1}
+            assert len(refs) == len(set(refs)), \
+                f"Case {case['id']} repeats transaction id(s): {duplicates}"
+
+    def test_every_case_declares_allocations(self, manifest_data):
+        """Present on all 30, usually empty.
+
+        Emitted everywhere so no reader can conclude a case predates the
+        feature and quietly skip the duplicate check for it.
+        """
+        for case in manifest_data["cases"]:
+            assert "allocations" in case, f"Case {case['id']} does not declare allocations"
+            assert isinstance(case["allocations"], list), \
+                f"Case {case['id']} allocations is not a list"
+
+    def test_allocations_join_to_exactly_one_ledger_row(self, manifest_data):
+        """The allocation names a transaction this case's own feed holds.
+
+        There is no cross-case ledger pool, so the join is local. A typo here
+        yields an allocation the engine never matches to a candidate, and the
+        duplicate silently verifies.
+        """
+        for case in manifest_data["cases"]:
+            refs = [row["external_transaction_id"] for row in case["ledger"]]
+            for alloc in case["allocations"]:
+                txn = alloc["external_transaction_id"]
+                assert refs.count(txn) == 1, \
+                    f"Case {case['id']} allocates {txn}, which matches {refs.count(txn)} ledger rows"
+
+    def test_allocations_point_at_a_different_order(self, manifest_data):
+        """An allocation naming its own order is not a duplicate at all.
+
+        The engine treats that as an idempotent re-verification of the same
+        order and returns no conflict, so the case would report VERIFIED. This
+        one field is the difference between D01 proving its scenario and D01
+        proving nothing.
+        """
+        for case in manifest_data["cases"]:
+            own_ref = case["order"]["external_order_ref"]
+            for alloc in case["allocations"]:
+                assert alloc["allocated_to_order_ref"] != own_ref, \
+                    f"Case {case['id']} allocates its transaction to its own order {own_ref}"
+
+    def test_n03_reference_stays_unreadable(self, manifest_data):
+        """N03's two feed rows are only indistinguishable while the receipt is not.
+
+        If visible.reference_id ever names one of the two transactions, that
+        candidate becomes dominant, the pair stops being ambiguous, and the case
+        verifies instead of asking for a human. The null is the scenario.
+        """
+        n03 = next(c for c in manifest_data["cases"] if c["id"] == "N03")
+        assert n03["visible"]["reference_id"] is None, \
+            "N03 must keep an unreadable reference or it stops being ambiguous"
+        assert len(n03["ledger"]) == 2, "N03 needs two indistinguishable feed rows"

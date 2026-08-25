@@ -23,16 +23,19 @@
         "claimed_offset_min": -11,
         "raw_timestamp_text": "20 Aug 2026, 01:54 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 150000,
-        "external_transaction_id": "EP0000011",
-        "sender_name": "Bilal Ahmed Khan",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -12,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 150000,
+          "external_transaction_id": "EP0000011",
+          "sender_name": "Bilal Ahmed Khan",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -12,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G01",
         "expected_amount_paisa": 150000
@@ -60,16 +63,19 @@
         "claimed_offset_min": -20,
         "raw_timestamp_text": "20 Aug 2026, 01:45 PM"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 250000,
-        "external_transaction_id": "JC0000022",
-        "sender_name": "Mohammad Usman Shaikh",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -21,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 250000,
+          "external_transaction_id": "JC0000022",
+          "sender_name": "Mohammad Usman Shaikh",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -21,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G02",
         "expected_amount_paisa": 250000
@@ -97,16 +103,19 @@
         "claimed_offset_min": -15,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "raast",
-        "amount_paisa": 350000,
-        "external_transaction_id": "RA0000033",
-        "sender_name": "Saad Tariq Qureshi",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -16,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "raast",
+          "amount_paisa": 350000,
+          "external_transaction_id": "RA0000033",
+          "sender_name": "Saad Tariq Qureshi",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -16,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G03",
         "expected_amount_paisa": 350000
@@ -134,16 +143,19 @@
         "claimed_offset_min": -20,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "bank",
-        "amount_paisa": 500000,
-        "external_transaction_id": "BK0000044",
-        "sender_name": "Faisal Javed Malik",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -21,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "bank",
+          "amount_paisa": 500000,
+          "external_transaction_id": "BK0000044",
+          "sender_name": "Faisal Javed Malik",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -21,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G04",
         "expected_amount_paisa": 500000
@@ -171,16 +183,19 @@
         "claimed_offset_min": -25,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 200000,
-        "external_transaction_id": "EP0000055",
-        "sender_name": "Hassan Raza Shah",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -26,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 200000,
+          "external_transaction_id": "EP0000055",
+          "sender_name": "Hassan Raza Shah",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -26,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G05",
         "expected_amount_paisa": 150000
@@ -208,16 +223,19 @@
         "claimed_offset_min": -30,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 180000,
-        "external_transaction_id": "JC0000066",
-        "sender_name": "Hamza Imran Butt",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -31,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 180000,
+          "external_transaction_id": "JC0000066",
+          "sender_name": "Hamza Imran Butt",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -31,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G06",
         "expected_amount_paisa": 180000
@@ -245,16 +263,19 @@
         "claimed_offset_min": -35,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "raast",
-        "amount_paisa": 420000,
-        "external_transaction_id": "RA0000070",
-        "sender_name": "Muhammad Bilal Shaikh",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -36,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "raast",
+          "amount_paisa": 420000,
+          "external_transaction_id": "RA0000070",
+          "sender_name": "Muhammad Bilal Shaikh",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -36,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G07",
         "expected_amount_paisa": 420000
@@ -282,16 +303,19 @@
         "claimed_offset_min": -40,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "bank",
-        "amount_paisa": 300000,
-        "external_transaction_id": "BK0000081",
-        "sender_name": "KASHIF ALTAF KHAN",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -41,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "bank",
+          "amount_paisa": 300000,
+          "external_transaction_id": "BK0000081",
+          "sender_name": "KASHIF ALTAF KHAN",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -41,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G08",
         "expected_amount_paisa": 300000
@@ -319,16 +343,19 @@
         "claimed_offset_min": -45,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 85000,
-        "external_transaction_id": "EP0000092",
-        "sender_name": "Ayesha Fatima",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -46,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 85000,
+          "external_transaction_id": "EP0000092",
+          "sender_name": "Ayesha Fatima",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -46,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G09",
         "expected_amount_paisa": 85000
@@ -356,16 +383,19 @@
         "claimed_offset_min": -50,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 120000,
-        "external_transaction_id": "JC0000101",
-        "sender_name": "Omar Farooq",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -51,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 120000,
+          "external_transaction_id": "JC0000101",
+          "sender_name": "Omar Farooq",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -51,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-G10",
         "expected_amount_paisa": 120000
@@ -393,7 +423,8 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": null,
+      "ledger": [],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-U01",
         "expected_amount_paisa": 150000
@@ -421,16 +452,19 @@
         "claimed_offset_min": -2,
         "raw_timestamp_text": "20 Aug 2026, 02:03 PM"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 200000,
-        "external_transaction_id": "JC0000202",
-        "sender_name": "Asad Ullah",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -2,
-        "status": "PENDING",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 200000,
+          "external_transaction_id": "JC0000202",
+          "sender_name": "Asad Ullah",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -2,
+          "status": "PENDING",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-U02",
         "expected_amount_paisa": 200000
@@ -458,7 +492,8 @@
         "claimed_offset_min": -7200,
         "raw_timestamp_text": "15 Aug 2026, 02:05 PM"
       },
-      "ledger": null,
+      "ledger": [],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-U03",
         "expected_amount_paisa": 150000
@@ -486,7 +521,8 @@
         "claimed_offset_min": -15,
         "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
       },
-      "ledger": null,
+      "ledger": [],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-U04",
         "expected_amount_paisa": 300000
@@ -515,16 +551,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 50000,
-        "external_transaction_id": "EP0000303",
-        "sender_name": "Shoaib Malik",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 50000,
+          "external_transaction_id": "EP0000303",
+          "sender_name": "Shoaib Malik",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-S01",
         "expected_amount_paisa": 500000
@@ -553,16 +592,19 @@
         "claimed_offset_min": -15,
         "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 150000,
-        "external_transaction_id": "JC0000311",
-        "sender_name": "Waseem Akram",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -16,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 150000,
+          "external_transaction_id": "JC0000311",
+          "sender_name": "Waseem Akram",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -16,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-S02",
         "expected_amount_paisa": 150000
@@ -591,16 +633,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 200000,
-        "external_transaction_id": "EPS03999",
-        "sender_name": "Rizwan Ahmed",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 200000,
+          "external_transaction_id": "EPS03999",
+          "sender_name": "Rizwan Ahmed",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-S03",
         "expected_amount_paisa": 400000
@@ -629,16 +674,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 150000,
-        "external_transaction_id": "EPS04999",
-        "sender_name": "Adeel Chaudhry",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 150000,
+          "external_transaction_id": "EPS04999",
+          "sender_name": "Adeel Chaudhry",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-S04",
         "expected_amount_paisa": 300000
@@ -667,16 +715,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 350000,
-        "external_transaction_id": "EPS05999",
-        "sender_name": "Fake Customer",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 350000,
+          "external_transaction_id": "EPS05999",
+          "sender_name": "Fake Customer",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-S05",
         "expected_amount_paisa": 700000
@@ -705,16 +756,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 180000,
-        "external_transaction_id": "EPS06999",
-        "sender_name": "Naveed Iqbal",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 180000,
+          "external_transaction_id": "EPS06999",
+          "sender_name": "Naveed Iqbal",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-S06",
         "expected_amount_paisa": 360000
@@ -742,16 +796,25 @@
         "claimed_offset_min": -11,
         "raw_timestamp_text": "20 Aug 2026, 01:54 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 150000,
-        "external_transaction_id": "EP0000011",
-        "sender_name": "Bilal Ahmed Khan",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -12,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 150000,
+          "external_transaction_id": "EP0000011",
+          "sender_name": "Bilal Ahmed Khan",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -12,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [
+        {
+          "external_transaction_id": "EP0000011",
+          "allocated_to_order_ref": "ORD-G01",
+          "allocated_offset_min": -11
+        }
+      ],
       "order": {
         "external_order_ref": "ORD-D01",
         "expected_amount_paisa": 150000
@@ -779,16 +842,19 @@
         "claimed_offset_min": -20,
         "raw_timestamp_text": "20 Aug 2026, 01:45 PM"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 250000,
-        "external_transaction_id": "JC0000022",
-        "sender_name": "Muhammad Usman Sheikh",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -21,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 250000,
+          "external_transaction_id": "JC0000022",
+          "sender_name": "Muhammad Usman Sheikh",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -21,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-D02",
         "expected_amount_paisa": 250000
@@ -816,16 +882,19 @@
         "claimed_offset_min": -15,
         "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
       },
-      "ledger": {
-        "rail": "raast",
-        "amount_paisa": 350000,
-        "external_transaction_id": "RA0000033",
-        "sender_name": "Saad Tariq Qureshi",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -16,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "raast",
+          "amount_paisa": 350000,
+          "external_transaction_id": "RA0000033",
+          "sender_name": "Saad Tariq Qureshi",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -16,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-D03",
         "expected_amount_paisa": 350000
@@ -853,16 +922,25 @@
         "claimed_offset_min": -20,
         "raw_timestamp_text": "20 Aug 2026, 01:45 PM"
       },
-      "ledger": {
-        "rail": "bank",
-        "amount_paisa": 500000,
-        "external_transaction_id": "BK0000044",
-        "sender_name": "Faisal Javed Malik",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -21,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "bank",
+          "amount_paisa": 500000,
+          "external_transaction_id": "BK0000044",
+          "sender_name": "Faisal Javed Malik",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -21,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [
+        {
+          "external_transaction_id": "BK0000044",
+          "allocated_to_order_ref": "ORD-G04",
+          "allocated_offset_min": -20
+        }
+      ],
       "order": {
         "external_order_ref": "ORD-D04",
         "expected_amount_paisa": 500000
@@ -890,16 +968,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026, 01:55 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 120000,
-        "external_transaction_id": "EP0000505",
-        "sender_name": "Waqar Younis",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 120000,
+          "external_transaction_id": "EP0000505",
+          "sender_name": "Waqar Younis",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-N01",
         "expected_amount_paisa": 150000
@@ -927,16 +1008,19 @@
         "claimed_offset_min": -12,
         "raw_timestamp_text": "20 Aug 2026, 01:53 PM"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 500000,
-        "external_transaction_id": "JC0000516",
-        "sender_name": "Junaid Jamshed",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -13,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 500000,
+          "external_transaction_id": "JC0000516",
+          "sender_name": "Junaid Jamshed",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -13,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-N02",
         "expected_amount_paisa": 150000
@@ -964,16 +1048,29 @@
         "claimed_offset_min": -15,
         "raw_timestamp_text": "20 Aug 2026, 01:50 PM"
       },
-      "ledger": {
-        "rail": "easypaisa",
-        "amount_paisa": 150000,
-        "external_transaction_id": "EP0000520",
-        "sender_name": "Irfan Khan",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -15,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 150000,
+          "external_transaction_id": "EP0000520",
+          "sender_name": "Irfan Khan",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -15,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        },
+        {
+          "rail": "easypaisa",
+          "amount_paisa": 150000,
+          "external_transaction_id": "EP0000531",
+          "sender_name": "Irfan Khan",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -15,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-N03",
         "expected_amount_paisa": 150000
@@ -1001,16 +1098,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 150000,
-        "external_transaction_id": "JC0000542",
-        "sender_name": "Arslan Ash",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 150000,
+          "external_transaction_id": "JC0000542",
+          "sender_name": "Arslan Ash",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-N04",
         "expected_amount_paisa": 150000
@@ -1038,16 +1138,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": null
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 250000,
-        "external_transaction_id": "JC0000553",
-        "sender_name": "Danish Taimoor",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 250000,
+          "external_transaction_id": "JC0000553",
+          "sender_name": "Danish Taimoor",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-N05",
         "expected_amount_paisa": 250000
@@ -1075,16 +1178,19 @@
         "claimed_offset_min": -10,
         "raw_timestamp_text": "20 Aug 2026"
       },
-      "ledger": {
-        "rail": "jazzcash",
-        "amount_paisa": 180000,
-        "external_transaction_id": "JC0000564",
-        "sender_name": "Shahid Afridi",
-        "receiver_name": "Ali Traders",
-        "ledger_offset_min": -11,
-        "status": "POSTED",
-        "trust_level": "SIMULATOR"
-      },
+      "ledger": [
+        {
+          "rail": "jazzcash",
+          "amount_paisa": 180000,
+          "external_transaction_id": "JC0000564",
+          "sender_name": "Shahid Afridi",
+          "receiver_name": "Ali Traders",
+          "ledger_offset_min": -11,
+          "status": "POSTED",
+          "trust_level": "SIMULATOR"
+        }
+      ],
+      "allocations": [],
       "order": {
         "external_order_ref": "ORD-N06",
         "expected_amount_paisa": 180000
