@@ -159,6 +159,35 @@ def test_invalid_auth_uses_standard_error_envelope() -> None:
     assert response.json()["code"] == "UNAUTHENTICATED"
 
 
+def test_upload_rejects_non_image_bytes() -> None:
+    response = client().post(
+        "/api/v1/verifications",
+        data={"order_id": "order_demo_1001"},
+        files={"screenshot": ("receipt.jpg", b"not an image", "image/jpeg")},
+        headers=upload_headers("invalid-image"),
+    )
+
+    assert response.status_code == 422
+    assert "readable image" in response.json()["detail"]
+
+
+def test_upload_enforces_configured_byte_limit() -> None:
+    response = client().post(
+        "/api/v1/verifications",
+        data={"order_id": "order_demo_1001"},
+        files={
+            "screenshot": (
+                "receipt.jpg",
+                b"x" * (8 * 1024 * 1024 + 1),
+                "image/jpeg",
+            )
+        },
+        headers=upload_headers("oversized-image"),
+    )
+
+    assert response.status_code == 413
+
+
 def test_idempotency_replays_same_request_and_rejects_conflict() -> None:
     app_client = client()
     headers = upload_headers("same-key")

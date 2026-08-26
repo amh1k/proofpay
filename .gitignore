@@ -16,6 +16,9 @@ venv/
 *.sqlite3
 storage/
 backend/storage/
+# Track B's Python storage adapter is source code, not runtime data.
+!backend/proofpay/storage/
+!backend/proofpay/storage/**
 
 # Node
 node_modules/
