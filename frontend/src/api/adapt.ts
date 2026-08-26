@@ -297,8 +297,20 @@ export function adaptSummaries(value: Json): VerificationSummary[] {
     if (row === null) continue
     const id = str(row.id)
     if (id === null) continue
+    // The two dialects again: a live list item carries the figure and the
+    // provider flat, a mock item is a whole verification and carries them on its
+    // claim. Read flat first, then the claim, then give up and say so — never
+    // fall back to 0, which would render as "Rs 0" and read as a real amount.
+    const claim = obj(row.claim)
     try {
-      out.push({ id, order_id: str(row.order_id), status: status(row.status) })
+      out.push({
+        id,
+        order_id: str(row.order_id),
+        status: status(row.status),
+        amount_minor: int(row.amount_minor) ?? int(claim?.amount_minor),
+        currency: str(row.currency) ?? str(claim?.currency) ?? 'PKR',
+        created_at: str(row.created_at) ?? str(row.evaluated_at),
+      })
     } catch {
       /* an unreadable status is a row we cannot label — skip it */
     }

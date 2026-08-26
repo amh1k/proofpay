@@ -122,15 +122,24 @@ export interface VerificationResult {
  * One row of the history, as the app actually uses it.
  *
  * `GET /verifications` returns whole verifications in the generated mocks and
- * thin list items from the live API. Everything the app does with that list —
- * build the demo rail, pick something to replay — needs an id and a status and
- * nothing else, so `src/api/adapt.ts` folds both dialects into this and no screen
- * ever has to know which backend it is talking to.
+ * thin list items from the live API. `src/api/adapt.ts` folds both dialects into
+ * this, so no screen ever has to know which backend it is talking to.
+ *
+ * The last three fields are what makes a history row a row rather than a word.
+ * They are all OPTIONAL, and that is not laziness: the live list item declares
+ * `amount_minor` nullable, and a check whose screenshot the extractor could not
+ * read a figure from genuinely has no amount to show. Rule 8 applies — a field we
+ * could not read is said to be missing, never rendered as zero.
  */
 export interface VerificationSummary {
   id: string
   order_id: string | null
   status: VerificationStatus
+  /** Paisa, as always. Null when the screenshot carried no readable figure. */
+  amount_minor: number | null
+  currency: string
+  /** When the check ran, ISO-8601. Null only if the backend omitted it. */
+  created_at: string | null
 }
 
 export interface DashboardSummary {
