@@ -65,4 +65,3 @@ ignore = ["FURB157"]
 # DTZ stays enabled for `proofpay/`, where it correctly reports nothing.
 "tests/**" = ["DTZ001"]
 
-
