@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from proofpay.api.engine_inputs import (
     allocation_to_engine,
+    as_utc,
     claim_to_engine,
     order_to_engine,
     transaction_to_engine,
