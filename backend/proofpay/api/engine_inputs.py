@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from proofpay.core.models import Allocation, LedgerTxn, Order
+from proofpay.core.models import Allocation, LedgerTxn, Order, PaymentClaim
 from proofpay.core.money import Money
 from proofpay.core.reasons import Source
+from proofpay.core.timex import ClaimedInstant
 from proofpay.db.models import (
     MerchantTransaction,
     Order as OrderRecord,
@@ -71,9 +72,40 @@ def allocation_to_engine(record: TransactionAllocation) -> Allocation:
     )
 
 
+def claim_to_engine(record) -> PaymentClaim:
+    """Convert one persisted parser claim back into the engine contract."""
+    occurred_at = (
+        ClaimedInstant(
+            resolved_utc=as_utc(record.claimed_occurred_at),
+            assumed_tz=record.timezone_assumption or "UTC",
+        )
+        if record.claimed_occurred_at
+        else None
+    )
+    amount = (
+        Money(record.claimed_amount_minor, record.currency)
+        if record.claimed_amount_minor is not None and record.currency
+        else None
+    )
+    return PaymentClaim(
+        claim_id=str(record.id),
+        merchant_id=str(record.merchant_id),
+        proof_id=str(record.payment_proof_id),
+        provider=record.provider_code,
+        amount=amount,
+        sender_name=record.sender_name,
+        receiver_name=record.receiver_name,
+        reference_id=record.external_transaction_id,
+        occurred_at=occurred_at,
+        field_confidences=record.field_confidences,
+        parser_version=record.parser_version,
+    )
+
+
 __all__ = [
     "allocation_to_engine",
     "as_utc",
+    "claim_to_engine",
     "order_to_engine",
     "transaction_to_engine",
 ]
