@@ -66,8 +66,8 @@ from fastapi.testclient import TestClient
 
 from proofpay.api.engine_demo import demo_case_for
 from proofpay.api.v1.schemas import VerificationResult
-from proofpay.api.v1.verifications import _extract_claim
 from proofpay.api.verification_mapper import verification_result_from_decision
+from proofpay.api.verification_service import _extract_claim
 from proofpay.core.compare.levels import Agreement
 from proofpay.core.decide import DecisionPolicy, decide
 from proofpay.core.decide.engine import COMPARISONS, CONFIDENCE_KEYS, build_context
