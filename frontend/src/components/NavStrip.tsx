@@ -10,11 +10,19 @@
 
 import type { ReactElement } from 'react'
 import { navCells, type NavKey } from '../lib/nav'
-import type { DashboardSummary } from '../types'
+import type { VerificationSummary } from '../types'
 
 export interface NavStripProps {
-  /** Null while the dashboard is still loading; cells then show an em dash. */
-  summary: DashboardSummary | null
+  /**
+   * The checks this merchant has run — the same list a cell opens.
+   *
+   * The strip counts THIS rather than the dashboard endpoint, so a figure and
+   * the list behind it can never disagree. See `src/lib/nav.ts`.
+   *
+   * Null while the request is in flight; cells then show an em dash, never a
+   * zero.
+   */
+  items: VerificationSummary[] | null
   /** Which cell reads as current. Null on the result screen. */
   active?: NavKey | null
   onSelect: (key: NavKey) => void
@@ -22,8 +30,8 @@ export interface NavStripProps {
 
 const HAIRLINE = 'rgba(255,255,255,.16)'
 
-export function NavStrip({ summary, active, onSelect }: NavStripProps): ReactElement {
-  const cells = navCells(summary)
+export function NavStrip({ items, active, onSelect }: NavStripProps): ReactElement {
+  const cells = navCells(items)
 
   return (
     <nav

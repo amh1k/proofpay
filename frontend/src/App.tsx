@@ -29,7 +29,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import {
   approveVerification,
-  getDashboard,
   getVerification,
   listOrders,
   listVerifications,
@@ -37,16 +36,32 @@ import {
   submitClaim,
 } from './api/client'
 import { NavStrip } from './components/NavStrip'
-import type { NavKey } from './lib/nav'
+import type { FilterKey, NavKey } from './lib/nav'
+import { orderRef } from './lib/orders'
+import { HistoryScreen } from './screens/HistoryScreen'
 import { TopStrip } from './components/TopStrip'
 import { presentation, severity } from './lib/status'
 import { CheckingScreen } from './screens/CheckingScreen'
 import { ResultScreen } from './screens/ResultScreen'
 import { UploadScreen, type ClaimSource, type DemoClaim } from './screens/UploadScreen'
-import type { DashboardSummary, Order, VerificationResult, VerificationSummary } from './types'
+import type { Order, VerificationResult, VerificationSummary } from './types'
 
-/** The three screens. There is no fourth; a list view is a later stage. */
-export type Screen = 'upload' | 'checking' | 'result'
+/**
+ * The four screens.
+ *
+ *     upload --(screenshot)--> checking --(verdict)--> result
+ *        ^                                               |
+ *        +--------------(dismiss)------------------------+
+ *        |
+ *     history --(tap a row)--> checking --> result
+ *
+ * `history` is reached from the three counting cells of the nav strip and from
+ * nowhere else. It replays a past check through the SAME `runCheck` the upload
+ * screen uses, so a verdict opened from the list is the identical screen the
+ * merchant saw when it was first decided — including the hold, so the room sees
+ * one rhythm whichever way a verdict arrives.
+ */
+export type Screen = 'upload' | 'checking' | 'result' | 'history'
 
 /**
  * How long the checking screen holds before the verdict lands.
@@ -69,8 +84,15 @@ export default function App(): ReactElement {
   const [result, setResult] = useState<VerificationResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [startedAt, setStartedAt] = useState<number>(() => Date.now())
-  const [summary, setSummary] = useState<DashboardSummary | null>(null)
-  const [history, setHistory] = useState<VerificationSummary[]>([])
+  /** Null until the request lands, so the nav strip shows dashes and not zeros. */
+  const [history, setHistory] = useState<VerificationSummary[] | null>(null)
+
+  /**
+   * Which nav cell's list is open. Kept even while another screen shows, so the
+   * strip can still mark that cell as current — a merchant who opens a list,
+   * taps a row and reads the verdict has not stopped being in "do not approve".
+   */
+  const [filter, setFilter] = useState<FilterKey>('blocked')
 
   /**
    * The orders, and which one the merchant chose.
@@ -108,19 +130,19 @@ export default function App(): ReactElement {
   const runRef = useRef(0)
   const aliveRef = useRef(true)
 
+  /**
+   * Whether the verdict on screen was opened from the history list.
+   *
+   * A ref, not state: nothing renders from it, and making it state would rerender
+   * the verdict screen the moment a check starts for no visible reason.
+   */
+  const cameFromHistoryRef = useRef(false)
+
   useEffect(() => {
     aliveRef.current = true
     return () => {
       aliveRef.current = false
     }
-  }, [])
-
-  const loadSummary = useCallback(() => {
-    getDashboard()
-      .then((d) => {
-        if (aliveRef.current) setSummary(d)
-      })
-      .catch(() => undefined) // the strip shows em dashes; it is not worth an alert
   }, [])
 
   /**
@@ -149,10 +171,16 @@ export default function App(): ReactElement {
       })
   }, [])
 
-  useEffect(() => {
-    loadSummary()
-    loadOrders()
-
+  /**
+   * Every check this merchant has run.
+   *
+   * Feeds two surfaces that want different things from it: the demo rail on the
+   * upload screen picks three by status, and the history screen lists them. It is
+   * sorted worst-first here so both read the same order — `HistoryScreen` sorts
+   * again within a severity, which is a refinement of this rather than a
+   * disagreement with it.
+   */
+  const loadHistory = useCallback(() => {
     listVerifications()
       .then((items) => {
         if (!aliveRef.current) return
@@ -161,11 +189,16 @@ export default function App(): ReactElement {
       .catch((e: unknown) => {
         if (aliveRef.current) setError(errorText(e))
       })
-  }, [loadSummary, loadOrders])
+  }, [])
+
+  useEffect(() => {
+    loadOrders()
+    loadHistory()
+  }, [loadOrders, loadHistory])
 
   const demos: DemoClaim[] = useMemo(
     () =>
-      history.map((v) => ({
+      (history ?? []).map((v) => ({
         id: v.id,
         label: presentation(v.status).short,
         status: v.status,
@@ -212,6 +245,7 @@ export default function App(): ReactElement {
   const onSubmit = useCallback(
     (source: ClaimSource) => {
       const orderId = selectedOrderId
+      cameFromHistoryRef.current = false // this one came from the upload screen
       void runCheck(() => {
         if (source.kind === 'demo') return getVerification(source.verificationId)
         // Unreachable from the UI — the upload screen disables the control until
@@ -263,7 +297,11 @@ export default function App(): ReactElement {
     runRef.current += 1
     setResult(null)
     setSelectedOrderId(null)
-    setScreen('upload')
+    // Back where they came from. A verdict opened from a list is a merchant
+    // reading DOWN a list — dropping them on the upload screen loses their place
+    // and makes the next row cost two taps and a re-filter. A verdict from a
+    // fresh check has no list behind it, so that one still returns to upload.
+    setScreen(cameFromHistoryRef.current ? 'history' : 'upload')
   }, [])
 
   /**
@@ -285,15 +323,16 @@ export default function App(): ReactElement {
    */
   const startOver = useCallback(() => {
     runRef.current += 1
+    cameFromHistoryRef.current = false
     setResult(null)
     setError(null)
     setUsedTxnIds(new Set())
     setSelectedOrderId(null)
     setScreen('upload')
     void resetDemo()
-    loadSummary()
     loadOrders()
-  }, [loadSummary, loadOrders])
+    loadHistory()
+  }, [loadOrders, loadHistory])
 
   /** Escape is the same control as the button, for the presenter's laptop. */
   useEffect(() => {
@@ -304,13 +343,37 @@ export default function App(): ReactElement {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [startOver])
 
+  /**
+   * The nav strip. The action cell starts a check; the other three open the list
+   * of what they are counting.
+   *
+   * Opening a list refreshes it first. The counts in the strip are refetched by
+   * `startOver`, but the LIST behind them was loaded once on mount — so without
+   * this, a merchant who checks three payments and then taps a cell sees a figure
+   * of 4 above a list of 1. A count and its list disagreeing is worse than either
+   * being stale.
+   */
   const onNav = useCallback(
     (key: NavKey) => {
-      // Only the action cell does anything today. The three count cells become
-      // filtered lists in a later stage; they are deliberately inert, not fake.
-      if (key === 'check') startOver()
+      if (key === 'check') {
+        startOver()
+        return
+      }
+      runRef.current += 1 // an in-flight check must not land on top of the list
+      setFilter(key)
+      setScreen('history')
+      loadHistory()
     },
-    [startOver],
+    [startOver, loadHistory],
+  )
+
+  /** Replay a past check. Same path as a fresh one, hold included. */
+  const onOpenFromHistory = useCallback(
+    (verificationId: string) => {
+      cameFromHistoryRef.current = true
+      void runCheck(() => getVerification(verificationId))
+    },
+    [runCheck],
   )
 
   const shown = screen === 'result' ? result : null
@@ -332,10 +395,7 @@ export default function App(): ReactElement {
    * order is chosen, in far larger type; repeating it in the chrome would be the
    * same fact twice on one screen.
    */
-  const shownReference =
-    shown === null
-      ? null
-      : (orders?.find((o) => o.id === shown.order_id)?.external_order_ref ?? shown.order_id)
+  const shownReference = shown === null ? null : orderRef(orders, shown.order_id)
 
   return (
     <div className="flex min-h-full flex-col">
@@ -356,6 +416,15 @@ export default function App(): ReactElement {
           error={error}
         />
       )}
+      {screen === 'history' && (
+        <HistoryScreen
+          filter={filter}
+          items={history ?? []}
+          orders={orders}
+          onOpen={onOpenFromHistory}
+          error={error}
+        />
+      )}
       {screen === 'checking' && <CheckingScreen startedAt={startedAt} />}
       {screen === 'result' && result && (
         <ResultScreen
@@ -366,7 +435,14 @@ export default function App(): ReactElement {
         />
       )}
 
-      <NavStrip summary={summary} active={screen === 'upload' ? 'check' : null} onSelect={onNav} />
+      {/* The strip marks where the merchant is: the action cell on the upload
+        * screen, the open list's cell on the list. A verdict marks neither —
+        * a verdict is not a place in the app, it is an answer. */}
+      <NavStrip
+        items={history}
+        active={screen === 'upload' ? 'check' : screen === 'history' ? filter : null}
+        onSelect={onNav}
+      />
     </div>
   )
 }

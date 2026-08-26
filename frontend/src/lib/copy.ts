@@ -48,6 +48,30 @@ export const ORDER_NONE = 'no orders are waiting for a payment right now'
 
 export const CHECKING_TITLE = 'Checking against the payments that arrived'
 
+/* ── the history list ───────────────────────────────────────────────────────
+ * Headings say what the merchant is LOOKING AT, not what the app filtered by.
+ * "Payments you approved" is a fact about their shop; "Filtered by VERIFIED" is
+ * a fact about our query, and only one of those is worth the top of a screen. */
+export const HISTORY_TITLE: Readonly<Record<'verified' | 'blocked' | 'review', string>> = {
+  verified: 'Payments that checked out',
+  blocked: 'Do not approve these',
+  review: 'Worth a second look',
+}
+
+/**
+ * Shown when a list has no rows. Rule 4 again — say what we know, not what
+ * anyone did. "Nothing here yet" is a statement about the day, and a merchant
+ * whose morning was quiet has not done anything wrong.
+ */
+export const HISTORY_EMPTY: Readonly<Record<'verified' | 'blocked' | 'review', string>> = {
+  verified: 'No payments have checked out yet today.',
+  blocked: 'Nothing has been flagged today. That is the normal case.',
+  review: 'Nothing is waiting on you.',
+}
+
+/** The row's own label for a figure the screenshot never carried. Rule 8. */
+export const HISTORY_NO_AMOUNT = 'amount not shown'
+
 /** The bottom nav strip. Counts come from `DashboardSummary`. */
 export const NAV_LABELS = {
   verified: 'Verified today',
