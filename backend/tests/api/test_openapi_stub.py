@@ -168,7 +168,7 @@ def test_upload_rejects_non_image_bytes() -> None:
     )
 
     assert response.status_code == 422
-    assert "readable image" in response.json()["detail"]
+    assert "readable image" in response.json()["message"]
 
 
 def test_upload_enforces_configured_byte_limit() -> None:
