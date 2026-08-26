@@ -20,6 +20,14 @@ from proofpay.core.decide import DecisionPolicy, decide
 from proofpay.demo.clock import PINNED_ANCHOR
 from proofpay.extraction.errors import ExtractionError
 from proofpay.extraction.service import ExtractionService
+from proofpay.storage import (
+    InvalidImage,
+    LocalStorage,
+    StorageError,
+    UnsupportedImage,
+    UploadTooLarge,
+    validate_image,
+)
 
 from ..engine_demo import demo_case_for
 from .auth import CurrentPrincipal, DemoPrincipal, require_roles
@@ -35,7 +43,6 @@ from .stub_data import STUB_HISTORY, verification_by_id
 
 router = APIRouter(prefix="/verifications", tags=["verifications"], responses=ERROR_RESPONSES)
 _ALLOWED_MEDIA_TYPES = {"image/jpeg", "image/png", "image/webp"}
-_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 _FIXTURE_MANIFEST = Path(__file__).resolve().parents[4] / "fixtures" / "demo" / "manifest.json"
 SubmitPrincipal = Annotated[
     DemoPrincipal,
@@ -65,6 +72,15 @@ def _extraction_service() -> ExtractionService:
     settings = get_settings()
     mode = "cloud" if settings.effective_receipt_extractor() == "qwen" else "offline"
     return ExtractionService(api_key=settings.dashscope_api_key, mode=mode)
+
+
+@lru_cache(maxsize=1)
+def _storage_service() -> LocalStorage:
+    """Build the configured local proof store once per process."""
+    settings = get_settings()
+    if settings.storage_backend != "local":
+        raise RuntimeError("The configured object-storage adapter is not available")
+    return LocalStorage(settings.storage_local_path)
 
 
 def _extract_claim(content: bytes, *, verification_id: str, merchant_id: str):
@@ -143,20 +159,51 @@ async def _submit_verification(
         raise HTTPException(status_code=415, detail="Only JPEG, PNG, and WebP images are accepted")
 
     content = await screenshot.read()
-    if len(content) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Screenshot exceeds the 10 MB upload limit")
 
     fingerprint = request_fingerprint(order_id, content)
     existing = find_existing(principal.merchant_id, idempotency_key, fingerprint)
     if existing is not None:
         return existing
 
+    settings = get_settings()
+    try:
+        # This verifies the actual bytes and creates the private, metadata-free
+        # PNG that should be retained.  The original bytes remain the input to
+        # the deterministic fixture extractor, whose manifest is keyed by the
+        # original upload hash.
+        validated_upload = validate_image(content, max_bytes=settings.max_upload_bytes)
+        _storage_service().put(
+            validated_upload.storage_key,
+            validated_upload.stored_bytes,
+        )
+    except UploadTooLarge as exc:
+        raise HTTPException(
+            status_code=413,
+            detail="Screenshot exceeds the configured upload limit",
+        ) from exc
+    except UnsupportedImage as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except InvalidImage as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (StorageError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail="Proof storage is unavailable") from exc
+
     verification_id = f"verification_{uuid4().hex}"
-    claim = _extract_claim(
-        content,
-        verification_id=verification_id,
-        merchant_id=principal.merchant_id,
-    )
+    try:
+        claim = _extract_claim(
+            content,
+            verification_id=verification_id,
+            merchant_id=principal.merchant_id,
+        )
+    except Exception:
+        # There is no database row to reconcile yet.  Do not leave an object
+        # behind when extraction rejects the upload; the persistence slice will
+        # replace this with a durable proof-retention state.
+        try:
+            _storage_service().delete(validated_upload.storage_key)
+        except StorageError:
+            pass
+        raise
     evaluated_at = PINNED_ANCHOR.astimezone(UTC)
     decision = decide(
         claim,
