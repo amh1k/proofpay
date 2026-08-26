@@ -18,10 +18,16 @@
  * fail on stage: the first request that needs a token fetches one.
  */
 
-import { adaptDashboard, adaptSummaries, adaptVerification } from './adapt'
+import { adaptDashboard, adaptOrders, adaptSummaries, adaptVerification } from './adapt'
 import dashboardMock from '../mocks/dashboard.json'
+import ordersMock from '../mocks/orders.json'
 import verificationsMock from '../mocks/verifications.json'
-import type { DashboardSummary, VerificationResult, VerificationSummary } from '../types'
+import type {
+  DashboardSummary,
+  Order,
+  VerificationResult,
+  VerificationSummary,
+} from '../types'
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== 'false'
 
@@ -35,16 +41,6 @@ const TOKEN_KEY = 'proofpay.token'
  */
 const DEMO_USERNAME = 'owner'
 const DEMO_PASSWORD = 'proofpay-demo'
-
-/**
- * The order a screenshot is checked against.
- *
- * `POST /verifications` wants one, and this build has no order picker yet, so the
- * live path asks the API for the merchant's current order rather than inventing a
- * reference. The fallback is the demo backend's own order id — a real row on that
- * server, not a number made up to fill a field.
- */
-const FALLBACK_ORDER_ID = 'order_demo_1001'
 
 /** Pretend the network took a moment, so loading states are visible in mock mode. */
 const latency = (ms = 250): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -145,6 +141,10 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
     return request(path, init, false)
   }
   if (!res.ok) throw await failure(res)
+  // 204 means the server has nothing to say, and `res.json()` on an empty body
+  // throws a SyntaxError that reads like a broken endpoint. An action that
+  // succeeded must not surface as a parse error.
+  if (res.status === 204) return null
   return res.json()
 }
 
@@ -213,61 +213,124 @@ function idempotencyKey(): string {
   }
 }
 
-let orderId: string | null = null
-
-/** The merchant's current order, asked for once and remembered. */
-async function currentOrderId(): Promise<string> {
-  if (orderId !== null) return orderId
-  try {
-    const body = await request('/orders')
-    const items = (body as { items?: unknown }).items
-    const first = Array.isArray(items) ? (items[0] as { id?: unknown } | undefined) : undefined
-    orderId = typeof first?.id === 'string' ? first.id : FALLBACK_ORDER_ID
-  } catch {
-    orderId = FALLBACK_ORDER_ID
+/**
+ * The orders the merchant chooses between before submitting a screenshot.
+ *
+ * There is deliberately no memo here. The previous build asked for the list once,
+ * kept the first row forever and checked every upload against it, which is the
+ * bug this call exists to end: an order is a CHOICE now, and a cached answer
+ * cannot represent a choice that has not been made yet.
+ *
+ * Failures are not swallowed. Without a list there is nothing to pick and nothing
+ * to submit, so the shell must be able to say so rather than present an upload
+ * screen that cannot complete.
+ */
+export async function listOrders(): Promise<Order[]> {
+  if (USE_MOCKS) {
+    await latency()
+    return adaptOrders(ordersMock)
   }
-  return orderId
+  return adaptOrders(await request('/orders'))
 }
 
 /**
- * Hand a customer's screenshot to the engine.
+ * The stored check that belongs to one order, for mock mode only.
+ *
+ *     mocks/orders.json         the five orders, dumped from the backend
+ *     mocks/verifications.json  each of those orders checked against its own
+ *                               committed receipt by the real engine
+ *                                   └─ order_id — the join, and the whole point
+ *
+ * The join is a fact the ENGINE wrote into the fixture, not a table anyone keeps
+ * in step by hand. `scripts/generate_api_mocks.py` decides every fixture against
+ * the order it names and refuses to write a set in which an order in the picker
+ * has no answer behind it.
+ *
+ * Matching on the VERDICT instead — which is what this did first — joined the
+ * two files on the one field that says nothing about the money: choosing
+ * "ORD-G01 · Rs 1,500" replayed a Rs 2,000 VERIFIED check and told the merchant
+ * their Rs 1,500 order had been paid in full.
+ */
+function replayFor(orderId: string): VerificationResult | undefined {
+  return fixtures().find((v) => v.order_id === orderId)
+}
+
+/**
+ * Hand a customer's screenshot to the engine, for one chosen order.
  *
  * LIVE: multipart, with the order it is being checked against and an idempotency
  * key. The backend rejects anything that is not JPEG, PNG or WebP and anything
  * over 10 MB, and those messages are written for the merchant, so they are shown
- * as they come.
+ * as they come. `orderId` is passed in and never guessed — the engine 404s on an
+ * order it does not know, and a wrong-but-plausible id is worse than a 404,
+ * because it returns a confident verdict about the wrong money.
  *
  * MOCKS: there is nothing to read the screenshot WITH, so the file is not
- * inspected and a fixture is replayed. This is the one place mock mode is not the
- * truth, and it is why the demo rail exists — those buttons name the verdict they
- * are about to show instead of pretending to have read a picture.
+ * inspected and a stored verification is replayed. That is the one place mock
+ * mode is not the truth — but the one it replays is THIS ORDER'S OWN check, run
+ * for real against this order's expected amount when the fixtures were generated.
+ * The screenshot is the only thing being taken on trust; every figure on the
+ * verdict screen belongs to the order the merchant pointed at.
  *
- * The replay is the VERIFIED fixture, and that is a considered choice. The rail
- * already reaches the three verdicts that say no; VERIFIED is the fourth, it is
- * what most payments actually are, and it is the ONLY screen carrying "Use it" —
- * the memory that catches the same genuine receipt arriving twice. Without it
- * here, half the product is unreachable with no backend running.
+ * That is the whole point. Before the picker existed this always replayed the
+ * VERIFIED fixture, which was defensible when nothing on screen claimed
+ * otherwise. It stopped being defensible the moment a merchant could point at the
+ * edited-amount order: answering "Payment received" to that is a falsehood told at
+ * projector scale, in the one demo whose entire subject is a screenshot that lies.
+ * So the picker now means the same thing with and without a backend.
  */
-export async function submitClaim(file: File): Promise<VerificationResult> {
+export async function submitClaim(file: File, orderId: string): Promise<VerificationResult> {
   if (USE_MOCKS) {
     await latency(400)
-    const all = fixtures()
-    const replay = all.find((v) => v.status === 'VERIFIED') ?? all[0]
-    if (!replay) throw new Error('No verification to show yet.')
+
+    // Not a fallback to something else — an order with no honest answer behind it
+    // must fail loudly here rather than borrow another order's verdict.
+    const replay = replayFor(orderId)
+    if (!replay) throw new Error('There is no example check for that order.')
     return replay
   }
 
   const body = new FormData()
-  body.append('order_id', await currentOrderId())
+  body.append('order_id', orderId)
   body.append('screenshot', file, file.name)
 
   return adaptVerification(
     await request('/verifications', {
       method: 'POST',
       body,
+      // A fresh key per submission. The fingerprint the backend stores is
+      // (order_id, image), so reusing one key across two orders is a conflict,
+      // not a replay — and switching orders mid-demo is now a normal thing to do.
       headers: { 'Idempotency-Key': idempotencyKey() },
     }),
   )
+}
+
+/**
+ * The merchant approved this order. Spend the screenshot behind it.
+ *
+ * Checking a receipt and accepting it are two acts, and only the second one
+ * spends anything. The backend used to record the proof image the moment a check
+ * came back VERIFIED, which turned a mis-click in the order picker into a fraud
+ * accusation: pick the wrong order of two that cost the same, see "Payment
+ * received", back out, re-check against the right order — and the honest
+ * customer's receipt came back DUPLICATE, "ask the customer for a new payment".
+ * Nothing had been counted. This call is the merchant actually committing, and
+ * it is the only thing that makes a later submission of the same image a reuse.
+ *
+ * Best-effort and silent, like `resetDemo`: the approve action is a local
+ * decision the merchant has already made, and a backend that is down must not
+ * turn it into an error on screen. In mock mode there is no server to tell.
+ */
+export async function approveVerification(verificationId: string): Promise<void> {
+  if (USE_MOCKS) return
+  try {
+    await request(`/verifications/${encodeURIComponent(verificationId)}/approve`, {
+      method: 'POST',
+    })
+  } catch {
+    /* the merchant's decision stands either way; this is only the memory of it */
+  }
 }
 
 /**

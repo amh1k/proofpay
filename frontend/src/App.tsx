@@ -28,8 +28,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import {
+  approveVerification,
   getDashboard,
   getVerification,
+  listOrders,
   listVerifications,
   resetDemo,
   submitClaim,
@@ -41,7 +43,7 @@ import { presentation, severity } from './lib/status'
 import { CheckingScreen } from './screens/CheckingScreen'
 import { ResultScreen } from './screens/ResultScreen'
 import { UploadScreen, type ClaimSource, type DemoClaim } from './screens/UploadScreen'
-import type { DashboardSummary, VerificationResult, VerificationSummary } from './types'
+import type { DashboardSummary, Order, VerificationResult, VerificationSummary } from './types'
 
 /** The three screens. There is no fourth; a list view is a later stage. */
 export type Screen = 'upload' | 'checking' | 'result'
@@ -69,6 +71,27 @@ export default function App(): ReactElement {
   const [startedAt, setStartedAt] = useState<number>(() => Date.now())
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [history, setHistory] = useState<VerificationSummary[]>([])
+
+  /**
+   * The orders, and which one the merchant chose.
+   *
+   * This lives here rather than in `UploadScreen` for the same reason every other
+   * cross-screen fact does: the upload screen is unmounted while a check runs and
+   * again while its verdict is on the wall, and a choice that evaporates on the
+   * way to the answer is not a choice the merchant can trust. `startOver` and
+   * `onDismiss` both clear the choice, deliberately — see there.
+   *
+   * `orders` is `null` until the server has answered, and goes BACK to null if it
+   * fails. Null means "we do not know yet"; `[]` is the server telling us this
+   * merchant has nothing waiting. The picker says those two things differently,
+   * and it must never announce an empty order book we have not been told about.
+   *
+   * `selectedOrderId` is `null` as a real state, not a missing default. There is
+   * no order until the merchant names one, and `submitClaim` is not called
+   * without it.
+   */
+  const [orders, setOrders] = useState<Order[] | null>(null)
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
 
   /**
    * Which transactions have been spent. This is the whole point of "Use it": the
@@ -100,8 +123,36 @@ export default function App(): ReactElement {
       .catch(() => undefined) // the strip shows em dashes; it is not worth an alert
   }, [])
 
+  /**
+   * The orders — on mount, and again on every reset.
+   *
+   * The retry is not politeness. This is the one request the live path cannot do
+   * without: with no list there is nothing to pick, so "Check this payment" can
+   * never become available, and a single failed round trip on venue wifi would
+   * otherwise disable the whole product until someone reloaded the browser —
+   * which is exactly what a presenter mid-story will not think to do. `startOver`
+   * is always on screen and bound to Escape, so the recovery is the tap they
+   * already know.
+   *
+   * A failure puts `orders` back to null, never to `[]`. The difference is what
+   * the picker is allowed to say about the merchant's book; see the state above.
+   */
+  const loadOrders = useCallback(() => {
+    listOrders()
+      .then((items) => {
+        if (aliveRef.current) setOrders(items)
+      })
+      .catch((e: unknown) => {
+        if (!aliveRef.current) return
+        setOrders(null)
+        setError(errorText(e))
+      })
+  }, [])
+
   useEffect(() => {
     loadSummary()
+    loadOrders()
+
     listVerifications()
       .then((items) => {
         if (!aliveRef.current) return
@@ -110,7 +161,7 @@ export default function App(): ReactElement {
       .catch((e: unknown) => {
         if (aliveRef.current) setError(errorText(e))
       })
-  }, [loadSummary])
+  }, [loadSummary, loadOrders])
 
   const demos: DemoClaim[] = useMemo(
     () =>
@@ -150,27 +201,68 @@ export default function App(): ReactElement {
     }
   }, [])
 
+  /**
+   * The single dispatch point. A demo button replays a stored verification and
+   * needs no order; a real screenshot is always checked AGAINST one.
+   *
+   * The chosen id is read once, here, and closed over — so a merchant who changes
+   * their mind while a check is in the air changes the NEXT check, never the one
+   * whose verdict is already on its way to the wall.
+   */
   const onSubmit = useCallback(
     (source: ClaimSource) => {
-      void runCheck(() =>
-        source.kind === 'demo'
-          ? getVerification(source.verificationId)
-          : submitClaim(source.file),
-      )
+      const orderId = selectedOrderId
+      void runCheck(() => {
+        if (source.kind === 'demo') return getVerification(source.verificationId)
+        // Unreachable from the UI — the upload screen disables the control until
+        // an order is chosen. Kept because the alternative, once, was to pick an
+        // order on the merchant's behalf, and that is the defect being fixed.
+        if (orderId === null) {
+          return Promise.reject(new Error('Choose which order this payment is for first.'))
+        }
+        return submitClaim(source.file, orderId)
+      })
     },
-    [runCheck],
+    [runCheck, selectedOrderId],
   )
 
+  /**
+   * The merchant approved. Two memories, and they are not the same memory.
+   *
+   * `usedTxnIds` is this session's: it greys out the approve button if the same
+   * payment comes back, and it is local because the demo's ledger is local.
+   *
+   * `approveVerification` is the backend's, and it is called for EVERY approval,
+   * including the ones with no transaction to spend. What it records is the
+   * screenshot, not the payment, and a screenshot is spent by the act of
+   * approving whether or not a transaction was named. Calling it after the
+   * `txnId` guard would have made screenshot reuse silently unreachable for any
+   * verdict that names no transaction.
+   */
   const onUse = useCallback((v: VerificationResult) => {
+    void approveVerification(v.id)
     const txnId = v.matched_txn_id
     if (!txnId) return
     setUsedTxnIds((prev) => new Set(prev).add(txnId))
   }, [])
 
-  /** Leave this verdict. The used-payment memory survives — that is its whole job. */
+  /**
+   * Leave this verdict. The used-payment memory survives — that is its whole job.
+   *
+   * The chosen order does NOT survive, for the same reason it does not survive a
+   * reset: every button on a verdict screen comes back here — "Do not approve",
+   * "Approve anyway", "Not now" — so this, not the reset, is the path a presenter
+   * actually returns on. Leaving the choice filled in means the next screenshot
+   * pasted onto that screen is instantly checkable against the PREVIOUS story's
+   * order, with focus already on "Check this payment" and one Enter between the
+   * room and a confident verdict about the wrong money. Nothing would ask, and
+   * nothing on screen would be wrong — which is precisely the defect this picker
+   * was built to remove.
+   */
   const onDismiss = useCallback(() => {
     runRef.current += 1
     setResult(null)
+    setSelectedOrderId(null)
     setScreen('upload')
   }, [])
 
@@ -181,16 +273,27 @@ export default function App(): ReactElement {
    * next run of the demo needs — otherwise the second telling of the VERIFIED
    * story opens on a spent button. `resetDemo()` clears the server's side of the
    * same state when there is a server; on mocks it does nothing and says nothing.
+   *
+   * The chosen order goes too. `POST /demo/reset` cannot clear it — it is only
+   * ever in this browser — so if it survived, the next telling would open with an
+   * order already picked, which is both a stale choice and the wrong first beat:
+   * the story starts by asking which order this is for.
+   *
+   * And the orders themselves are fetched again. This is the only always-visible
+   * control, so it is also the only place a demo that opened before the backend
+   * was up can be rescued without a browser reload.
    */
   const startOver = useCallback(() => {
     runRef.current += 1
     setResult(null)
     setError(null)
     setUsedTxnIds(new Set())
+    setSelectedOrderId(null)
     setScreen('upload')
     void resetDemo()
     loadSummary()
-  }, [loadSummary])
+    loadOrders()
+  }, [loadSummary, loadOrders])
 
   /** Escape is the same control as the button, for the presenter's laptop. */
   useEffect(() => {
@@ -212,16 +315,47 @@ export default function App(): ReactElement {
 
   const shown = screen === 'result' ? result : null
 
+  /**
+   * What the top strip calls the order behind the verdict.
+   *
+   * Read off the RESULT, never off the picker. The merchant can change their
+   * choice while a verdict is on the wall, and the strip must keep naming the
+   * order this answer is about — including a demo-rail replay, which was checked
+   * against an order nobody picked just now.
+   *
+   * A verification carries the ENGINE's order id (`order_demo_1002`); the name the
+   * merchant knows lives on the order and is never copied into the result. So the
+   * id is translated back through the list already loaded, falling back to the raw
+   * id only for an order that is not one of ours — honest, and rare.
+   *
+   * Nothing is shown on the upload screen. The picker is right there saying which
+   * order is chosen, in far larger type; repeating it in the chrome would be the
+   * same fact twice on one screen.
+   */
+  const shownReference =
+    shown === null
+      ? null
+      : (orders?.find((o) => o.id === shown.order_id)?.external_order_ref ?? shown.order_id)
+
   return (
     <div className="flex min-h-full flex-col">
       <TopStrip
-        reference={shown?.order_id ?? null}
+        reference={shownReference}
         checkedAt={shown?.evaluated_at ?? null}
         provider={shown?.matched_transaction?.provider ?? shown?.claim.provider ?? null}
         onReset={startOver}
       />
 
-      {screen === 'upload' && <UploadScreen onSubmit={onSubmit} demos={demos} error={error} />}
+      {screen === 'upload' && (
+        <UploadScreen
+          onSubmit={onSubmit}
+          orders={orders}
+          selectedOrderId={selectedOrderId}
+          onSelectOrder={setSelectedOrderId}
+          demos={demos}
+          error={error}
+        />
+      )}
       {screen === 'checking' && <CheckingScreen startedAt={startedAt} />}
       {screen === 'result' && result && (
         <ResultScreen

@@ -44,6 +44,7 @@ from proofpay.core.compare.amount import (
     AmountRelation,
     ClaimIntegrity,
     is_material_inflation,
+    is_material_overpayment,
     is_power_of_ten_multiple,
 )
 from proofpay.core.compare.amount_match import AMOUNT_MATCH, compare_amount_match
@@ -71,6 +72,7 @@ from proofpay.core.decide.policy import DecisionPolicy
 from proofpay.core.duplicates import AllocationConflict, DuplicateReport
 from proofpay.core.models import LedgerTxn, Order, PaymentClaim, ScoredCandidate
 from proofpay.core.money import Money
+from proofpay.core.proofs import NO_PROOF_HISTORY, ProofReport
 from proofpay.core.reasons import ObservationCode, ReasonCode, Status
 from proofpay.core.retrieval import (
     KEY_TIME_WINDOW,
@@ -211,6 +213,8 @@ def context(
     amount_compared: bool = False,
     observations: tuple[str, ...] = (),
     duplicates: DuplicateReport | None = None,
+    proofs: ProofReport | None = None,
+    low_confidence_fields: tuple[str, ...] = (),
 ) -> Context:
     """A `Context` with candidate scores set to exactly the numbers given."""
     cands = [
@@ -236,6 +240,14 @@ def context(
         amount=amount,
         amount_compared=amount_compared,
         duplicates=duplicates if duplicates is not None else DuplicateReport(),
+        # No proof history unless a test asks for one. `Context` gives this
+        # field no default on purpose -- `build_context` must always say what
+        # the history was, even when the answer is "nothing" -- so the default
+        # lives here, where it is a test convenience rather than a production
+        # silence.
+        proofs=proofs if proofs is not None else NO_PROOF_HISTORY,
+        # Likewise: nothing the extractor was unsure of unless a test says so.
+        low_confidence_fields=low_confidence_fields,
         observations=observations,
     )
 
@@ -509,6 +521,88 @@ def test_deflation_is_never_material_at_any_size():
     """
     assert is_material_inflation(-10**9, MATERIAL_LEDGER.minor, POLICY) is False
     assert is_material_inflation(0, MATERIAL_LEDGER.minor, POLICY) is False
+
+
+# ==========================================================================
+# Materiality of an overpayment
+# ==========================================================================
+#
+# The commercial-axis mirror of the block above, and deliberately the same
+# three tests: an inclusive absolute floor, an inclusive proportional bar, and
+# the wrong sign never reaching either. What differs is the base — the ratio is
+# taken against the ORDER TOTAL rather than against what arrived, because the
+# question is "how much more than I asked for is this?".
+
+#: Both knobs are cleared at exactly this point: 20 000 paisa is the floor, and
+#: 20 000 paisa is exactly 1.0x the 20 000 paisa order total.
+MATERIAL_ORDER = Money(POLICY.overpayment_material_minor)
+MATERIAL_OVERPAYMENT = POLICY.overpayment_material_minor  # 20_000 paisa = Rs. 200
+
+
+@pytest.mark.parametrize(
+    "overpayment_minor,expected_minor,expected",
+    [
+        (MATERIAL_OVERPAYMENT - 1, MATERIAL_ORDER.minor, False),
+        (MATERIAL_OVERPAYMENT, MATERIAL_ORDER.minor, True),
+        (MATERIAL_OVERPAYMENT + 1, MATERIAL_ORDER.minor, True),
+    ],
+    ids=["one-paisa-under-the-floor", "exactly-the-floor", "one-paisa-over"],
+)
+def test_the_overpayment_floor_is_inclusive(
+    overpayment_minor, expected_minor, expected
+):
+    """An overpayment of exactly `overpayment_material_minor` is material.
+
+    Below it the customer rounded up or covered delivery, and stopping the
+    order to fetch a human costs the merchant more than the overpayment does.
+    """
+    assert (
+        is_material_overpayment(overpayment_minor, expected_minor, POLICY) is expected
+    )
+
+
+@pytest.mark.parametrize(
+    "expected_minor,expected",
+    [
+        (MATERIAL_ORDER.minor, True),          # 1.0x == 20_000, cleared exactly
+        (MATERIAL_ORDER.minor + 100, False),   # 1.0x == 20_100, floor not enough
+    ],
+    ids=["ratio-cleared-exactly", "ratio-one-paisa-short"],
+)
+def test_the_proportional_overpayment_test_is_inclusive(expected_minor, expected):
+    """Both knobs must be cleared, so the ratio has its own boundary.
+
+    Raising the order total raises the bar above a fixed-size overpayment, and
+    the review stops — which is what keeps a Rs. 200 tip on a Rs. 50,000 order
+    off a human's desk while a Rs. 200 tip on a Rs. 200 order reaches one.
+    """
+    assert (
+        is_material_overpayment(MATERIAL_OVERPAYMENT, expected_minor, POLICY) is expected
+    )
+
+
+def test_an_underpayment_is_never_a_material_overpayment_at_any_size():
+    """The sign is the signal here too, on the commercial axis.
+
+    `compare_amounts` passes the *negated* shortfall, so a shortfall of the
+    wrong sign must not be able to fall through into the magnitude test and
+    report the underpaid order as overpaid.
+    """
+    assert is_material_overpayment(-10**9, MATERIAL_ORDER.minor, POLICY) is False
+    assert is_material_overpayment(0, MATERIAL_ORDER.minor, POLICY) is False
+
+
+def test_the_two_overpayment_fixtures_land_on_opposite_sides_of_the_threshold():
+    """The pair the threshold exists to separate, in paisa, from the manifest.
+
+    G05 (+33% on a Rs 1,500 order) and N02 (+233% on the same order) carry the
+    same reason code and opposite expected verdicts. `overpayment_material_pct`
+    is the number that tells them apart, so the two are asserted here together
+    rather than left to be re-derived from two fixture files.
+    """
+    order_total = 150_000  # Rs 1,500, the order both fixtures are placed against
+    assert is_material_overpayment(50_000, order_total, POLICY) is False   # G05, +33%
+    assert is_material_overpayment(350_000, order_total, POLICY) is True   # N02, +233%
 
 
 def _inflated_run(claim_amount: Money):

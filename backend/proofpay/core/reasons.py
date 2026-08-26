@@ -93,6 +93,15 @@ class ReasonCode(StrEnum):
     AMOUNT_EXACT = "AMOUNT_EXACT"
     AMOUNT_UNDERPAID = "AMOUNT_UNDERPAID"
     AMOUNT_OVERPAID = "AMOUNT_OVERPAID"
+    #: A *magnitude* qualifier that accompanies AMOUNT_OVERPAID rather than
+    #: replacing it: the arithmetic emits AMOUNT_OVERPAID for any overpayment
+    #: at all, and `R072` adds this one when the excess clears both policy
+    #: knobs. It exists so the explainer can tell "far more than the order
+    #: total arrived, someone will want it back" (`R072`) from "this is in
+    #: review for unrelated reasons and happens also to be overpaid" (`R999`)
+    #: without importing a rule id into `core.explain`. Same role
+    #: FIELD_CONTRADICTS_MATCH plays for `R075`.
+    AMOUNT_OVERPAID_MATERIAL = "AMOUNT_OVERPAID_MATERIAL"
     MISSING_ORDER_AMOUNT = "MISSING_ORDER_AMOUNT"
 
     # Amount axis B: claim vs ledger (an integrity signal; the sign is the signal)
@@ -117,6 +126,16 @@ class ReasonCode(StrEnum):
     SOURCE_PARTIALLY_TRUSTED = "SOURCE_PARTIALLY_TRUSTED"
     TAMPER_OBSERVATIONS = "TAMPER_OBSERVATIONS"
     SCREENSHOT_ONLY_EVIDENCE = "SCREENSHOT_ONLY_EVIDENCE"
+    #: The reader was not confident it read a field this match rests on.
+    #: Carried by `R067`, and deliberately field-agnostic for the same reason
+    #: FIELD_CONTRADICTS_MATCH is: which field was doubted is already on the
+    #: evidence rows and on `Context.low_confidence_fields`, and a per-field
+    #: code would have to be kept in step with every comparison ever added.
+    #:
+    #: This says something about OUR READER, never about the customer. A low
+    #: confidence is a blurry photograph or a font the model has not seen, and
+    #: the merchant-facing wording has to stay on that side of the line -- the
+    #: customer did nothing wrong, we could not read what they sent.
     LOW_EXTRACTION_CONFIDENCE = "LOW_EXTRACTION_CONFIDENCE"
 
     # Positive evidence
@@ -150,6 +169,15 @@ class ObservationCode(StrEnum):
     # Names
     NAME_MASKED = "NAME_MASKED"
     NAME_COMMON_TOKENS_ONLY = "NAME_COMMON_TOKENS_ONLY"
+
+    # Proof provenance
+    #: Emitted as `PROOF_PREVIOUSLY_SUBMITTED:<earlier order id>` — the
+    #: `CODE:detail` shape the extractor's notes already use. Neutral by
+    #: construction: it records *where* this image was seen before, while the
+    #: verdict that it should not be accepted again is `ReasonCode.PROOF_REUSED`
+    #: carried by a rule. It exists because "already used" is only actionable
+    #: once the merchant is told which order to go and look at.
+    PROOF_PREVIOUSLY_SUBMITTED = "PROOF_PREVIOUSLY_SUBMITTED"
 
     # Image forensics (produced above core, consumed as opaque strings)
     IMAGE_EXIF_MISSING = "IMAGE_EXIF_MISSING"

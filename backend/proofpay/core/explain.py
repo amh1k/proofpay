@@ -54,6 +54,7 @@ from proofpay.core.reasons import ObservationCode, ReasonCode, Risk, Status
 from proofpay.core.timex import GRANULARITY_DAY, PKT, ClaimedInstant
 
 __all__ = [
+    "ABSENT",
     "MARK_AGREE",
     "MARK_CAUTION",
     "MARK_CONFLICT",
@@ -138,6 +139,24 @@ _ACTIONS: Final[Mapping[Status, str]] = {
     Status.NEEDS_REVIEW: "Check this payment yourself before approving the order.",
 }
 
+#: The DUPLICATE action, reworded for a reused *image*. The mapping above talks
+#: about a payment that was already used, which is exactly right when a
+#: transaction was allocated twice and exactly wrong when the same picture was
+#: sent twice — there, the payment behind it may be perfectly good and the
+#: merchant's next move is to ask for a fresh receipt rather than to go hunting
+#: through an earlier order's money.
+_PROOF_REUSE_ACTION: Final[str] = (
+    "Do not approve the order. Ask the customer for a fresh receipt for this "
+    "order — this one has been sent before."
+)
+
+
+def _action_for(decision: Decision) -> str:
+    """The imperative sentence, chosen by status and then by what was found."""
+    if decision.status is Status.DUPLICATE and ReasonCode.PROOF_REUSED in decision.reasons:
+        return _PROOF_REUSE_ACTION
+    return _ACTIONS[decision.status]
+
 #: Plain-language readings of the neutral notes. Unmapped codes render as
 #: themselves rather than being dropped: an observation nobody has written
 #: prose for is still an observation the merchant is entitled to see.
@@ -176,7 +195,13 @@ _VERDICT_OVERRIDES: Final[Mapping[str, str]] = {
 #: ledger row; anything weaker than equality would be inventing a number.
 _AMOUNT_EQUAL_LEVELS: Final[frozenset[str]] = frozenset({"AMT_EXACT"})
 
-_ABSENT: Final[str] = "—"  # em dash: nothing was read for this field
+#: What a row prints when there was nothing to print. Part of this module's
+#: OUTPUT CONTRACT and therefore public: it is what `render_text` draws into a
+#: column, and a caller rendering somewhere other than a terminal has to be able
+#: to recognise it and substitute its own idea of a hole. `api/verification_mapper`
+#: does exactly that -- an em dash is a drawing, and a JSON client needs `null`,
+#: which is why this stopped being private the moment a second renderer existed.
+ABSENT: Final[str] = "—"  # em dash: nothing was read for this field
 
 #: Why an `R065` match is in front of a human. The fields all agree — that is
 #: the point of the rule, which only fires on a match strong enough to have
@@ -193,6 +218,21 @@ _PARTIALLY_TRUSTED_SENTENCE: Final[str] = (
     "your live bank feed, so a person needs to confirm it."
 )
 
+#: `R067`'s sentence, and the blame in it points at us.
+#:
+#: The customer did nothing wrong here: the payment may well be perfect and the
+#: fields may all agree. What happened is that our reader could not make out
+#: part of the picture, so "the receipt is unclear" would accuse them of sending
+#: a bad one. It also has to survive being read by a merchant who is looking at
+#: four ✓ rows, which is why it names the reading rather than the evidence.
+#:
+#: Last of the review parts, after the contradiction and the money: those name
+#: something about the payment, and this names something about us.
+_LOW_CONFIDENCE_SENTENCE: Final[str] = (
+    "Part of this screenshot could not be read clearly, so a person should "
+    "check it against the transaction."
+)
+
 
 # --------------------------------------------------------------------------
 # Formatting helpers
@@ -206,7 +246,7 @@ def format_money(amount: Money | None) -> str:
     to check two zeroes. Display only — `Money` arithmetic never touches this.
     """
     if amount is None:
-        return _ABSENT
+        return ABSENT
     major, _, minor = amount.as_major_str.partition(".")
     grouped = f"{int(major):,}"
     if minor and int(minor):
@@ -216,7 +256,7 @@ def format_money(amount: Money | None) -> str:
 
 def _format_instant(when: datetime | None, tz: tzinfo) -> str:
     if when is None:
-        return _ABSENT
+        return ABSENT
     return when.astimezone(tz).strftime("%Y-%m-%d %H:%M")
 
 
@@ -228,7 +268,7 @@ def _format_claimed_instant(claimed: ClaimedInstant | None, tz: tzinfo) -> str:
     timestamp comparison goes out of its way to avoid.
     """
     if claimed is None:
-        return _ABSENT
+        return ABSENT
     local = claimed.resolved_utc.astimezone(tz)
     if claimed.granularity_s >= GRANULARITY_DAY:
         return local.strftime("%Y-%m-%d")
@@ -307,33 +347,33 @@ class Explanation:
 def _claimed_value(field: str, claim: PaymentClaim, tz: tzinfo) -> str:
     match field:
         case "reference":
-            return claim.reference_id or _ABSENT
+            return claim.reference_id or ABSENT
         case "amount":
             return format_money(claim.amount)
         case "timestamp":
             return _format_claimed_instant(claim.occurred_at, tz)
         case "sender_name":
-            return claim.sender_name or _ABSENT
+            return claim.sender_name or ABSENT
         case "receiver_name":
-            return claim.receiver_name or _ABSENT
-    return _ABSENT
+            return claim.receiver_name or ABSENT
+    return ABSENT
 
 
 def _actual_value(field: str, txn: LedgerTxn | None, tz: tzinfo) -> str:
     if txn is None:
-        return _ABSENT
+        return ABSENT
     match field:
         case "reference":
-            return txn.reference_id or _ABSENT
+            return txn.reference_id or ABSENT
         case "amount":
             return format_money(txn.amount)
         case "timestamp":
             return _format_instant(txn.occurred_at, tz)
         case "sender_name":
-            return txn.sender_name or _ABSENT
+            return txn.sender_name or ABSENT
         case "receiver_name":
-            return txn.receiver_name or _ABSENT
-    return _ABSENT
+            return txn.receiver_name or ABSENT
+    return ABSENT
 
 
 def _received_amount(
@@ -348,7 +388,7 @@ def _received_amount(
     *equal*, then the ledger amount was the claimed amount, and saying so is
     reporting the recorded evidence rather than guessing at it.
 
-    Anything weaker than equality yields `_ABSENT`, and every caller checks for
+    Anything weaker than equality yields `ABSENT`, and every caller checks for
     that rather than printing it — an em dash in the middle of a sentence about
     money is worse than a shorter sentence.
     """
@@ -361,7 +401,7 @@ def _received_amount(
         and claim.amount is not None
     ):
         return format_money(claim.amount)
-    return _ABSENT
+    return ABSENT
 
 
 def _contradiction_sentence(decision: Decision) -> str:
@@ -404,14 +444,51 @@ def _shortfall_sentence(received: str, expected: str) -> str:
 
     Shared by the plain underpaid review and the imported-row one so the two
     cannot drift into describing the same shortfall differently. Like every
-    other sentence here it drops a clause rather than printing `_ABSENT` into
+    other sentence here it drops a clause rather than printing `ABSENT` into
     the middle of one.
     """
-    if received != _ABSENT and expected != _ABSENT:
+    if received != ABSENT and expected != ABSENT:
         return f"{received} was received against an order for {expected}."
-    if expected != _ABSENT:
+    if expected != ABSENT:
         return f"Less than the order total of {expected} was received."
     return "Less was received than this order asked for."
+
+
+def _overpayment_sentence(received: str, expected: str) -> str:
+    """The overpayment, worded down to whatever is actually known.
+
+    The mirror of `_shortfall_sentence`, and it degrades the same way: a clause
+    is dropped rather than a hole rendered into the middle of a sentence. Says
+    what arrived and what was asked for, and stops there — whether the customer
+    fat-fingered a digit or sent another order's money is the human's call, and
+    this sentence exists to put the two numbers in front of them.
+    """
+    if received != ABSENT and expected != ABSENT:
+        return f"{received} was received against an order for {expected}."
+    if expected != ABSENT:
+        return f"Much more than the order total of {expected} was received."
+    return "Much more was received than this order asked for."
+
+
+def _earlier_proof_order(decision: Decision) -> str | None:
+    """Which order this same image already paid, if the engine recorded it.
+
+    `core/proofs.py` publishes that as a `CODE:detail` observation rather than
+    as a field on `Decision`, so this reads it back out. Reading a structured
+    note is the same move as reading a reason code — both are machine-stable
+    parts of the decision, and neither is prose being reverse-engineered.
+
+    "Already used" without a place to look is an argument the merchant cannot
+    win, so the sentence below is worth this much: with the order named they can
+    go and check it, and without it they are being asked to take our word.
+    """
+    prefix = f"{ObservationCode.PROOF_PREVIOUSLY_SUBMITTED}:"
+    for note in decision.observations:
+        if note.startswith(prefix):
+            ref = note[len(prefix) :].strip()
+            if ref:
+                return ref
+    return None
 
 
 def _summary(
@@ -432,9 +509,9 @@ def _summary(
     reasons = set(decision.reasons)
     received = _received_amount(decision, claim, txn)
     claimed = format_money(claim.amount)
-    expected = format_money(order.expected) if order is not None else _ABSENT
-    have_received = received != _ABSENT
-    have_expected = expected != _ABSENT
+    expected = format_money(order.expected) if order is not None else ABSENT
+    have_received = received != ABSENT
+    have_expected = expected != ABSENT
 
     match decision.status:
         case Status.VERIFIED:
@@ -455,12 +532,24 @@ def _summary(
                 return "No matching transaction was found in your feed."
             return "No transaction in your feed matched this proof closely enough."
         case Status.SUSPICIOUS:
-            if ReasonCode.CLAIM_INFLATED in reasons and have_received and claimed != _ABSENT:
+            if ReasonCode.CLAIM_INFLATED in reasons and have_received and claimed != ABSENT:
                 return f"The screenshot claims {claimed}, but {received} was received."
             if ReasonCode.TAMPER_OBSERVATIONS in reasons:
                 return "The image looks edited and the details match only weakly."
             return "A transaction was found, but the details conflict."
         case Status.DUPLICATE:
+            # Two different accusations wear one status word, and the sentence
+            # must not blur them. A reused TRANSACTION means the money arrived
+            # once and is being spent twice. A reused SCREENSHOT means the
+            # picture is a re-run — the transaction behind it may never have
+            # been claimed by anyone. Saying "this transaction was already
+            # used" on a `R025` verdict states something the engine did not
+            # find, and a merchant who checks will find it false.
+            if ReasonCode.PROOF_REUSED in reasons:
+                earlier = _earlier_proof_order(decision)
+                if earlier is not None:
+                    return f"This same screenshot was already used for order {earlier}."
+                return "This same screenshot was already used for an earlier order."
             return "This transaction was already used for another order."
         case Status.NEEDS_REVIEW:
             if ReasonCode.AMBIGUOUS_CANDIDATES in reasons:
@@ -480,10 +569,28 @@ def _summary(
             # contradiction really was routed by the contradiction.)
             if ReasonCode.FIELD_CONTRADICTS_MATCH in reasons:
                 parts.append(_contradiction_sentence(decision))
+            # `AMOUNT_OVERPAID_MATERIAL` and not `AMOUNT_OVERPAID`: the plain
+            # code rides along on any overpaid claim, including ones sent here
+            # by `R999` for reasons that have nothing to do with the money
+            # (fixture G05 is exactly that), and announcing the overpayment
+            # there would name the wrong cause. The magnitude code says the
+            # overpayment is big enough to be worth a sentence of its own.
+            #
+            # It is derived in `compare_amounts` alongside the direction, NOT
+            # carried by `R072` alone. When it was `R072`'s, every rule above
+            # `R072` silently swallowed the overpayment: `R065` and `R067` both
+            # outrank it, so a Rs 5,000 payment against a Rs 1,500 order was
+            # announced to the merchant as "part of this screenshot could not
+            # be read clearly" and nothing else. That is exactly the asymmetry
+            # the comment above rejects for the shortfall case.
+            if ReasonCode.AMOUNT_OVERPAID_MATERIAL in reasons:
+                parts.append(_overpayment_sentence(received, expected))
             if ReasonCode.AMOUNT_UNDERPAID in reasons:
                 parts.append(_shortfall_sentence(received, expected))
             if ReasonCode.SOURCE_PARTIALLY_TRUSTED in reasons:
                 parts.append(_PARTIALLY_TRUSTED_SENTENCE)
+            if ReasonCode.LOW_EXTRACTION_CONFIDENCE in reasons:
+                parts.append(_LOW_CONFIDENCE_SENTENCE)
             if parts:
                 return "\n".join(parts)
             # `R999` really does mean this, and only it should say it.
@@ -491,8 +598,27 @@ def _summary(
     return "This payment could not be decided automatically."
 
 
+def _observation_line(code: str) -> str:
+    """One neutral note, in words, falling back to the code itself.
+
+    The `PROOF_PREVIOUSLY_SUBMITTED:<order>` note is special-cased rather than
+    handled by a general `CODE:detail` split, and narrowly on purpose: the
+    other note that carries a payload today is `IMAGE_PHASH:phash:<64 hex>`,
+    whose detail is a hash no merchant has any use for, and a general rule
+    would start printing it into the observation list. When a second note earns
+    a rendered payload, that is the moment to generalise — not before.
+    """
+    prefix = f"{ObservationCode.PROOF_PREVIOUSLY_SUBMITTED}:"
+    if code.startswith(prefix):
+        ref = code[len(prefix) :].strip()
+        if ref:
+            return f"This same screenshot was submitted for order {ref}"
+        return "This same screenshot was submitted before"
+    return _OBSERVATION_LABELS.get(code, code)
+
+
 def _observation_lines(codes: Iterable[str]) -> tuple[str, ...]:
-    return tuple(_OBSERVATION_LABELS.get(code, code) for code in codes)
+    return tuple(_observation_line(code) for code in codes)
 
 
 def explain(
@@ -530,7 +656,7 @@ def explain(
         summary=_summary(decision, claim, txn, order),
         rows=rows,
         observations=_observation_lines(decision.observations),
-        recommended_action=_ACTIONS[decision.status],
+        recommended_action=_action_for(decision),
         reasons=decision.reasons,
         matched_txn_id=decision.matched_txn_id,
         fired_rule_id=decision.fired_rule_id,
@@ -550,7 +676,7 @@ def _amount_block(rows: tuple[FieldRow, ...]) -> list[str]:
     an amount has been edited.
     """
     amount = next((r for r in rows if r.field == "amount"), None)
-    if amount is None or amount.actual == _ABSENT:
+    if amount is None or amount.actual == ABSENT:
         return []
     labels = ("Screenshot:", "Received:")
     values = (amount.claimed, amount.actual)

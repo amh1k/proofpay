@@ -5,7 +5,7 @@ Guide 9.3. The parametrised tables in `test_engine.py` cover the finite things
 the scorers, the level machinery, money arithmetic, and the single
 architectural commitment the whole product rests on.
 
-Six properties are load-bearing, and each has a section below:
+Seven properties are load-bearing, and each has a section below:
 
 1. **An empty ledger can never be VERIFIED** (guide 7.5). No screenshot-derived
    signal may alone establish that payment occurred. Every other test in this
@@ -18,6 +18,9 @@ Six properties are load-bearing, and each has a section below:
 4. **Money round-trips** through its display form, and never touches a float.
 5. **Ranking is deterministic**: shuffling the feed cannot change a decision.
 6. **Timestamp similarity is monotone**: closer never scores lower than further.
+7. **Removing evidence never helps**: a field the reader could not make out
+   must not score better than the same field read and found weak, or cropping
+   the sender's name off a receipt would improve the receipt.
 
 Two conventions this file relies on and re-asserts:
 
@@ -1085,6 +1088,329 @@ def test_confidence_is_bounded_and_derivable(outcomes, best, margin):
     )
     assert value == expected
     assert 0.0 <= value <= 1.0
+
+
+# ==========================================================================
+# 7. Removing evidence must never help
+# ==========================================================================
+#
+# The other half of `test_an_unreadable_field_never_argues_against_a_candidate`
+# above, and the half that was wrong for most of this engine's life. That test
+# says a MISSING field must not be scored as a *mismatch*. This section says
+# the opposite abuse is also forbidden: a MISSING field must not score better
+# than a field that was read and turned out to be weak. If it can, then
+# cropping the sender's name off a receipt improves the receipt, and a fraud
+# product is rewarding the destruction of evidence.
+#
+# The arithmetic, from `aggregate_score`: replacing a present outcome of weight
+# `w` and score `s` with a MISSING one takes `N/D` to `(N - ws) / (D - w(1-p))`
+# for `p = missing_evidence_penalty`. That is no larger than `N/D` exactly when
+# `s >= (N/D)(1-p)`, and since the aggregate is itself bounded by 1, the
+# sufficient condition on the *ladder* - the one that holds whatever else is on
+# the receipt - is `s >= 1 - p`.
+#
+# CONTRADICT rungs are excluded from the bound below, and the reason written
+# here for a while was the exact inverse of the mechanism. It read: "`R075`
+# blocks a verification on a contradicted field at any score, so a claim can
+# never be helped across `tau_accept` by hiding one." Hiding the field REMOVES
+# the `R075` block, because `R075` reads a field that is no longer there - and
+# it raises the score at the same time, because a contradicted field scores 0
+# and an absent one costs only `p` of its weight. The exclusion helped twice, in
+# the direction this section exists to forbid.
+#
+# The exclusion itself has to stay, because a CONTRADICT rung scores 0 and
+# `s >= 1 - p` would then demand `p = 1` - which is precisely "an unreadable
+# field argues against the candidate", forbidden two hundred lines up by
+# `test_an_unreadable_field_never_argues_against_a_candidate`. No penalty
+# satisfies both properties. So this is a real, open exposure rather than a case
+# the bound quietly covers, and it is pinned as one in `KNOWN_VERDICT_EXPOSURES`
+# below and walked through the real `decide()` there. The bound in this section
+# is what the AGREE and WEAK rungs - which block nothing at all - have to earn
+# on their own.
+
+#: The lower bound every agreeing rung has to clear for absence never to beat
+#: presence. Derived from the policy rather than written as 0.5, so retuning
+#: `missing_evidence_penalty` re-derives the bound instead of leaving a stale
+#: constant asserting the old one.
+ABSENCE_FLOOR: float = 1.0 - POLICY.missing_evidence_penalty
+
+#: The rungs that still score below `ABSENCE_FLOOR`, named one by one with the
+#: reason each is tolerated - the same pin-don't-hide shape
+#: `KNOWN_DISAGREEMENTS` uses in the manifest harness. A third entry appearing
+#: here is a decision somebody has to make out loud, which is why the test
+#: below fails rather than widening the set.
+#:
+#: Closing the last of the hole means `missing_evidence_penalty >= 0.7561`,
+#: which drops two labelled scenarios in `scenarios.yaml`
+#: (`no-transaction-id-printed` and `amount-unreadable-on-receipt`) below
+#: `tau_accept` - they assert that a receipt which simply never printed a field
+#: can still verify. Raising these two rung scores instead moves every score in
+#: the corpus. Both are product calls; neither is a tuning one.
+KNOWN_ABSENCE_EXPOSURES: dict[str, str] = {
+    "NAME_COMMON_ONLY": (
+        "Agreeing on `Muhammad Ali` is close to no evidence at all, and 0.20 is "
+        "the honest weight for it. Raising it to clear the floor would make the "
+        "commonest name in Pakistan into real evidence, which is the failure "
+        "this rung exists to prevent."
+    ),
+    "TS_HOUR_ART": (
+        "A receipt exactly one hour out is either a timezone rendering bug or a "
+        "different transaction, and 0.25 says the engine cannot tell which. "
+        "Scoring it higher would let an AM/PM artefact carry a verification."
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(ALL_COMPARISONS))
+def test_no_agreeing_rung_scores_below_what_its_own_absence_is_worth(name):
+    """Every rung that supports a match, on every discovered ladder.
+
+    Parametrised over the discovered comparisons rather than over a written
+    list, so a ladder somebody adds next month is held to the same bound on
+    the day it is written.
+    """
+    for level in ALL_COMPARISONS[name].levels:
+        if level.agreement in (Agreement.MISSING, Agreement.CONTRADICT):
+            continue
+        if level.code in KNOWN_ABSENCE_EXPOSURES:
+            continue
+        assert level.score >= ABSENCE_FLOOR, (
+            f"{name}: {level.code} scores {level.score}, below the "
+            f"{ABSENCE_FLOOR} an absent field is worth. A receipt would score "
+            f"better with this field cropped off than with it read. Either "
+            f"raise the rung, raise missing_evidence_penalty, or add it to "
+            f"KNOWN_ABSENCE_EXPOSURES with the reason it is tolerated."
+        )
+
+
+def test_every_named_absence_exposure_is_a_real_rung_that_is_still_exposed():
+    """A pin for a hole that has been closed is a lie in the other direction.
+
+    Both halves matter. A code naming no rung is a typo nobody would notice,
+    since the check above silently skips it; a rung that now clears the floor
+    is an exemption still being granted to something that no longer needs one,
+    and the entry has to be deleted rather than left there to reassure people.
+    """
+    by_code = {
+        level.code: level
+        for comparison in ALL_COMPARISONS.values()
+        for level in comparison.levels
+    }
+    for code, why in KNOWN_ABSENCE_EXPOSURES.items():
+        assert code in by_code, f"{code} names no rung on any ladder"
+        assert why.strip(), f"{code} is exempted without saying why"
+        assert by_code[code].score < ABSENCE_FLOOR, (
+            f"{code} now scores {by_code[code].score}, at or above the "
+            f"{ABSENCE_FLOOR} floor. Delete its KNOWN_ABSENCE_EXPOSURES entry."
+        )
+
+
+#: The exposure the bound above CANNOT cover, named rather than left to be
+#: rediscovered. Keyed by the ladder rung that gets blanked.
+#:
+#: `test_a_contradicted_field_is_still_worth_hiding` walks this one through the
+#: real engine and asserts the hole is still open, exactly as
+#: `test_every_named_absence_exposure_is_a_real_rung_that_is_still_exposed`
+#: does for `KNOWN_ABSENCE_EXPOSURES`: a pin for a hole somebody has closed is a
+#: lie in the other direction, so closing it must fail here and the entry has to
+#: be deleted rather than left reassuring people.
+#:
+#: **Why it is not closed here.** Not by tuning - see the algebra in the section
+#: comment above, where no value of `missing_evidence_penalty` satisfies both
+#: properties at once. Closing it needs a RULE: the missing-field sibling of
+#: `R075`, refusing to verify a claim whose ledger row carries a value for a
+#: field the receipt does not show. That rule would overturn
+#: `no-transaction-id-printed` and `amount-unreadable-on-receipt` in
+#: `scenarios.yaml`, both of which assert on purpose that a receipt which simply
+#: never printed a field can still verify. Which of those two products this is,
+#: is a decision for whoever owns the rule table, and not one to take by editing
+#: a threshold until a test goes green.
+KNOWN_VERDICT_EXPOSURES: dict[str, str] = {
+    "NAME_ELSE": (
+        "A sender name that flatly contradicts the transaction blocks the "
+        "verification through `R075`. Cropping that name off the receipt "
+        "removes the field, so `R075` has nothing left to read, AND raises the "
+        "aggregate, because a CONTRADICT rung scores 0 while an absent field "
+        "costs only `missing_evidence_penalty` of its weight. The claim goes "
+        "from NEEDS_REVIEW to VERIFIED. Every CONTRADICT rung on every ladder "
+        "has this shape; the sender name is the one a pair of scissors reaches "
+        "most easily, which is why it is the one walked through the engine."
+    ),
+}
+
+
+def _contradicting_name_case(sender_name):
+    """One claim, twice: the sender name read, and the sender name cropped off.
+
+    Everything else is held identical and deliberately strong - reference,
+    amount and timestamp all agree exactly - so the ONLY variable is whether the
+    contradicting field is on the receipt. That is what makes the comparison a
+    statement about the field rather than about the arrangement around it.
+
+    Returns the decision and the winner's aggregate together, because the
+    exposure has two halves and each is checked separately: the rule that fired,
+    and the score that let it.
+    """
+    occurred = datetime(2026, 8, 22, 8, 54, tzinfo=UTC)
+    txn = LedgerTxn(
+        txn_id="EP0000011",
+        amount=Money(150_000),
+        occurred_at=occurred,
+        sender_name="Shoaib Malik",
+        provider="easypaisa",
+    )
+    order = Order(order_id="O-1", expected=Money(150_000), reference="ORD-1")
+    claim = PaymentClaim(
+        claim_id="contradiction",
+        provider="easypaisa",
+        amount=Money(150_000),
+        sender_name=sender_name,
+        reference_id="EP0000011",
+        occurred_at=ClaimedInstant(resolved_utc=occurred, tz_stated=True),
+    )
+    now = datetime(2026, 8, 22, 9, 0, tzinfo=UTC)
+    args = (claim, order, [txn], [])
+    decision = decide(*args, now=now, policy=POLICY)
+    ctx = build_context(*args, now=now, policy=POLICY)
+    return decision, ctx.best.score
+
+
+def test_a_contradicted_field_is_still_worth_hiding():
+    """The strongest surviving form of the defect this section exists to catch.
+
+    Not a synthetic aggregate: this is `decide()`, the real rule table and the
+    shipped policy. A sender name that contradicts the matched transaction sends
+    the claim to a human; the same receipt with that name cropped away comes back
+    VERIFIED. "Crop the sender's name off" is the first thing anybody pokes at on
+    a fraud product, and the honest answer today is that it works - on a
+    contradicted field, though no longer on a weakly-agreeing one, which is what
+    raising `missing_evidence_penalty` to 0.50 did fix.
+
+    Asserted as a CURRENT FACT, so closing it fails here. When it does: delete
+    the `NAME_ELSE` entry from `KNOWN_VERDICT_EXPOSURES` and delete this test,
+    rather than relaxing either.
+    """
+    read, read_score = _contradicting_name_case("Bilal Chaudhry")
+    cropped, cropped_score = _contradicting_name_case(None)
+
+    assert read.status is Status.NEEDS_REVIEW
+    assert read.fired_rule_id == "R075"
+    assert cropped.status is Status.VERIFIED, (
+        "Hiding a contradicted field no longer buys a verification. That is the "
+        "hole KNOWN_VERDICT_EXPOSURES pins as open - delete the NAME_ELSE entry "
+        "and this test."
+    )
+    # Both halves are live, rather than one masking the other: the rule stopped
+    # blocking AND the score went up.
+    assert cropped_score > read_score
+
+
+def test_every_named_verdict_exposure_names_a_real_rung():
+    """The same both-directions check `KNOWN_ABSENCE_EXPOSURES` gets.
+
+    A code naming no rung is a typo nobody would notice, because nothing else
+    reads this table; an entry with no reason is an exemption granted in
+    silence. The "is it still open" half lives in the test above, which walks
+    the engine rather than the ladder.
+    """
+    by_code = {
+        level.code
+        for comparison in ALL_COMPARISONS.values()
+        for level in comparison.levels
+    }
+    for code, why in KNOWN_VERDICT_EXPOSURES.items():
+        assert code in by_code, f"{code} names no rung on any ladder"
+        assert why.strip(), f"{code} is exempted without saying why"
+
+
+#: Field -> the prefix its level codes are built from, so a synthetic outcome
+#: can be given the `_MISSING` suffix `FieldOutcome.is_missing` actually reads.
+_CODE_PREFIX: dict[str, str] = {c.field: c.codes[0].split("_")[0] for c in COMPARISONS}
+
+
+def _blanked(o: FieldOutcome) -> FieldOutcome:
+    """The same field, unreadable: zero score, MISSING agreement, MISSING code."""
+    return FieldOutcome(
+        field=o.field,
+        level_code=f"{_CODE_PREFIX[o.field]}_MISSING",
+        label="unreadable",
+        score=0.0,
+        agreement=Agreement.MISSING,
+    )
+
+
+def _outcome_at(field: str, score: float) -> FieldOutcome:
+    return FieldOutcome(
+        field=field,
+        level_code=f"{_CODE_PREFIX[field]}_TEST",
+        label="generated",
+        score=score,
+        agreement=Agreement.AGREE,
+    )
+
+
+@st.composite
+def outcomes_no_weaker_than_the_floor(draw: st.DrawFn) -> dict[str, FieldOutcome]:
+    """One present outcome per scored comparison, none below `ABSENCE_FLOOR`."""
+    return {
+        c.field: _outcome_at(
+            c.field,
+            draw(st.floats(min_value=ABSENCE_FLOOR, max_value=1.0, allow_nan=False)),
+        )
+        for c in COMPARISONS
+    }
+
+
+@given(
+    outcomes=outcomes_no_weaker_than_the_floor(),
+    blanked=st.sampled_from([c.field for c in COMPARISONS]),
+)
+@PROPERTY
+def test_removing_evidence_can_never_raise_the_aggregate(outcomes, blanked):
+    """The invariant itself, over every arrangement of the sibling fields.
+
+    An example would say only that one particular receipt does not improve
+    when a field is cropped away. The claim a merchant relies on is stronger:
+    for *any* combination of sibling evidence at or above `ABSENCE_FLOOR`,
+    destroying one field cannot raise the score. That is the guarantee the
+    floor was chosen to buy, so it is asserted at the floor rather than at the
+    scores the shipped ladders happen to carry today.
+    """
+    before = aggregate_score(outcomes, POLICY)
+    after = aggregate_score({**outcomes, blanked: _blanked(outcomes[blanked])}, POLICY)
+    assert after <= before + 1e-9, (
+        f"blanking {blanked} (score {outcomes[blanked].score}) raised the "
+        f"aggregate from {before} to {after}"
+    )
+
+
+def test_the_residual_hole_is_real_and_this_is_what_it_looks_like():
+    """The exposure the table above tolerates, demonstrated rather than described.
+
+    `NAME_COMMON_ONLY` still scores below the floor, so a receipt whose sender
+    line was cropped away really does aggregate higher than the same receipt
+    with a common name printed on it. What `missing_evidence_penalty` 0.50
+    changed is the size of the gap and, on the pair that matters, the verdict:
+    `scenarios.yaml` carries those two receipts as labelled rows and both now
+    land in review, where at 0.25 the cropped one verified and the honest one
+    did not.
+
+    Written as a test so that the day somebody closes this properly it fails
+    and points at the comment saying what to delete.
+    """
+    common = {
+        "reference": _outcome_at("reference", 1.0),  # REF_EXACT
+        "amount": _outcome_at("amount", 1.0),  # AMT_EXACT
+        "timestamp": _outcome_at("timestamp", 0.6),  # TS_DATE_ONLY
+        "sender_name": _outcome_at("sender_name", 0.2),  # NAME_COMMON_ONLY
+    }
+    cropped = {**common, "sender_name": _blanked(common["sender_name"])}
+
+    assert aggregate_score(cropped, POLICY) > aggregate_score(common, POLICY)
+    assert aggregate_score(cropped, POLICY) < POLICY.tau_accept, (
+        "the cropped receipt is back above tau_accept: the hole is no longer "
+        "only a scoring artefact and is deciding verdicts again"
+    )
 
 
 # ==========================================================================

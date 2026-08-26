@@ -152,6 +152,37 @@ export function presentation(status: VerificationStatus): StatusPresentation {
 }
 
 /**
+ * The verdict word for one RESULT, which is not always the word for its status.
+ *
+ * `DUPLICATE` carries two different accusations, and every other surface on the
+ * screen has already been split for them — the backend summary, the backend
+ * recommended action, the `copy.ts` lede and reply, `DuplicateRecord`'s lede and
+ * row label, `agreementMeaning`. The word was the one thing left, and it is the
+ * largest type on the page: `Already counted` sat at `text-verdict` size directly
+ * above a lede that denies it — "The picture is a copy, not a second payment."
+ * Nothing was counted for any order; what repeated is the picture, and the
+ * transaction behind it may never have been claimed by anyone.
+ *
+ * A function rather than a second table row because it needs the REASONS, which
+ * a status alone does not carry. `presentation(status).short` is deliberately
+ * left alone: the history list is built from summaries, which have a status and
+ * no reasons, and a label that changes depending on how much of a record the
+ * caller happens to hold is worse than one plain word.
+ */
+export function verdictWord(result: VerdictSubject): string {
+  if (result.status === 'DUPLICATE' && result.reasons.includes('PROOF_REUSED')) {
+    return 'Screenshot sent before'
+  }
+  return STATUS_PRESENTATION[result.status].word
+}
+
+/** The little of a result this module needs. Keeps `status.ts` off the API types. */
+interface VerdictSubject {
+  status: VerificationStatus
+  reasons: readonly string[]
+}
+
+/**
  * Worst first. Use for sorting a list of verifications so the merchant sees what
  * needs a decision before what does not.
  */

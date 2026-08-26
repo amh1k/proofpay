@@ -9,6 +9,7 @@ by someone being helpful.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 import pytest
@@ -73,6 +74,7 @@ def claim(
     ref: str | None = "TX1001",
     sender: str | None = SENDER,
     when: ClaimedInstant | None = CLAIMED_AT,
+    field_confidences: Mapping[str, float] | None = None,
 ) -> PaymentClaim:
     return PaymentClaim(
         claim_id="C-1",
@@ -81,6 +83,7 @@ def claim(
         reference_id=ref,
         sender_name=sender,
         occurred_at=when,
+        field_confidences=dict(field_confidences or {}),
     )
 
 
@@ -179,7 +182,29 @@ def partially_trusted(*, include_txn: bool = True) -> Explanation:
     )
 
 
-ALL = (verified, unmatched, suspicious, duplicate, underpaid, partially_trusted)
+def poorly_read(*, include_txn: bool = True) -> Explanation:
+    """`R067`: every field agrees, and the reader says it was unsure of one.
+
+    Like `partially_trusted` it only ever fires on a match strong enough to have
+    verified, so it lands the same trap: a screen of four ticks under a sentence
+    saying there is not enough evidence. In `ALL` for exactly that reason.
+    """
+    return explained(
+        claim(field_confidences={"amount": 0.5}),
+        order(),
+        [txn()],
+    )
+
+
+ALL = (
+    verified,
+    unmatched,
+    suspicious,
+    duplicate,
+    underpaid,
+    partially_trusted,
+    poorly_read,
+)
 
 
 @pytest.mark.parametrize(
@@ -191,6 +216,7 @@ ALL = (verified, unmatched, suspicious, duplicate, underpaid, partially_trusted)
         (duplicate, Status.DUPLICATE),
         (underpaid, Status.NEEDS_REVIEW),
         (partially_trusted, Status.NEEDS_REVIEW),
+        (poorly_read, Status.NEEDS_REVIEW),
     ],
     ids=[f.__name__ for f in ALL],
 )
@@ -511,10 +537,10 @@ def test_no_summary_ever_leaves_a_hole_where_money_should_be(build, include_txn)
     """Every status, both ways of calling `explain`. A sentence about money
     with the money missing is worse than no sentence at all, so a branch that
     cannot name an amount must drop the clause, not print the placeholder."""
-    from proofpay.core.explain import _ABSENT
+    from proofpay.core.explain import ABSENT
 
     summary = build(include_txn=include_txn).summary
-    assert _ABSENT not in summary
+    assert ABSENT not in summary
     assert summary and summary.strip() == summary
 
 
@@ -885,6 +911,25 @@ def test_a_partially_trusted_underpayment_states_the_shortfall_and_the_reason():
     assert "imported or hand-entered" in e.summary
 
 
+def test_an_unclear_screenshot_blames_the_reading_and_not_the_customer():
+    """`R067`'s sentence, and where the blame in it points.
+
+    The payment may be perfectly good — every field agrees. What went wrong is
+    that we could not make out part of the picture, so the wording has to say
+    that about US. "The receipt is unclear" accuses the customer of sending a
+    bad one, and a merchant who repeats it to them is repeating an accusation
+    the engine never made.
+    """
+    e = poorly_read()
+
+    assert e.status is Status.NEEDS_REVIEW
+    assert ReasonCode.LOW_EXTRACTION_CONFIDENCE in e.reasons
+    assert "could not be read clearly" in e.summary
+    assert "not enough evidence" not in e.summary.lower()
+    # The premise, as in the provenance test above: every field really agrees.
+    assert [row.mark for row in e.rows] == [MARK_AGREE] * len(e.rows)
+
+
 def test_only_a_reasonless_decision_says_there_is_not_enough_evidence():
     """The generic sentence is `R999`'s, and pointing any reasoned rule at it
     is how a specific finding gets rendered as a shrug."""
@@ -892,6 +937,7 @@ def test_only_a_reasonless_decision_says_there_is_not_enough_evidence():
 
     assert partially_trusted().summary != generic
     assert underpaid().summary != generic
+    assert poorly_read().summary != generic
 
 
 def test_every_level_code_in_every_comparison_has_a_declared_agreement():

@@ -22,5 +22,5 @@ def test_expected_reason_is_a_real_reason_code(case):
 
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c["id"])
 def test_ledger_source_is_one_the_engine_trusts(case):
-    if case.get("ledger"):
-        assert case["ledger"]["trust_level"] in {s.value for s in Source}
+    for row in case.get("ledger") or ():
+        assert row["trust_level"] in {s.value for s in Source}

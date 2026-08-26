@@ -24,16 +24,23 @@ from proofpay.core.reasons import ObservationCode, ReasonCode
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class StubPolicy:
-    """The three knobs this module reads, with the guide's section 7.3 defaults.
+    """The five knobs this module reads, with the guide's section 7.3 defaults.
 
     Local to the test so the amount comparison stays testable before
     ``core/decide/policy.py`` exists; ``DecisionPolicy`` satisfies the same
     structural protocol.
+
+    Kept in step with ``AmountPolicy`` by hand, which is the price of a
+    structural protocol: adding a field there and forgetting it here fails
+    every test in this module with an ``AttributeError`` rather than silently
+    reading a default nobody chose.
     """
 
     amount_tolerance_minor: int = 0
     inflation_material_minor: int = 5_000  # Rs. 50
     inflation_material_pct: float = 0.01
+    overpayment_material_minor: int = 20_000  # Rs. 200
+    overpayment_material_pct: float = 1.0
 
 
 POLICY = StubPolicy()

@@ -13,17 +13,73 @@ WHY THIS FILE EXISTS:
     validates schema consistency, and outputs `fixtures/demo/manifest.json`.
 
 DATA MODEL PER CASE:
-    - id:         Unique case identifier (G01–G10, U01–U04, S01–S06, D01–D04, N01–N06)
-    - title:      Human-readable description of scenario
-    - category:   VERIFIED | UNMATCHED | SUSPICIOUS | DUPLICATE | NEEDS_REVIEW
-    - visible:    Screenshot visual ground truth (what OCR should extract)
-    - ledger:     Merchant trusted bank feed ground truth (what actually happened)
-    - order:      Expected order details (what customer ordered)
-    - expected:   Expected verification decision & reason code
+    - id:          Unique case identifier (G01–G10, U01–U04, S01–S06, D01–D04, N01–N06)
+    - title:       Human-readable description of scenario
+    - category:    VERIFIED | UNMATCHED | SUSPICIOUS | DUPLICATE | NEEDS_REVIEW
+    - tamper_type: Forensic artifact to inject (SUSPICIOUS cases only)
+    - visible:     Screenshot visual ground truth (what OCR should extract)
+    - ledger:      LIST of merchant trusted feed rows (what actually happened).
+                   A list because a real feed can hold two transfers a receipt
+                   cannot tell apart — N03 is exactly that case, and a single
+                   object cannot express it. Empty list = nothing in the feed.
+                   `status` is load-bearing, not decorative: core's LedgerTxn has
+                   no status field, so only POSTED rows may be handed to the
+                   engine. U02 is an in-flight payment and must stay PENDING.
+    - allocations: LIST of earlier claims that already consumed a transaction.
+                   Present (usually empty) on every case so no reader concludes
+                   a case predates the feature. Each entry is:
+                     external_transaction_id — joins to a row in THIS case's
+                       ledger; spelled the same as the ledger key so the join is
+                       visible by eye. Becomes Allocation.txn_id, and the
+                       identity LedgerTxn.txn_id == Allocation.txn_id is what
+                       the engine's duplicate rule actually tests.
+                     allocated_to_order_ref — the EARLIER order holding the
+                       payment. Must differ from this case's own
+                       order.external_order_ref: core reads an allocation naming
+                       the same order as idempotent re-verification and lets the
+                       claim through, which silently un-does the whole scenario.
+                     allocated_offset_min — optional, minutes from the pinned
+                       anchor. Core orders contested allocations by this.
+                   Deliberately omitted: `verification_id` (core accepts None
+                   and nothing reads it) and an ACTIVE/RELEASED `status` (no
+                   case needs a released allocation yet, and an unconsumed key
+                   is how ledger.status sat decorative for months).
+    - prior_proofs: LIST of EARLIER SUBMISSIONS OF THIS CASE'S OWN IMAGE. Present
+                   (usually empty) on every case, for the same reason
+                   `allocations` is. The allocation sibling one layer up: an
+                   allocation records that a TRANSACTION was already consumed,
+                   this records that the IMAGE was. Each entry is:
+                     image_of_case — the case whose receipt this one is
+                       re-sending. `_resolve_prior_proofs` turns it into that
+                       case's `sha256` at build time, so no 64-character hash is
+                       ever pasted in by hand and the join survives a re-render.
+                       For an exact-reuse fixture the two cases share a JPEG
+                       byte for byte, which is why D02's image IS G02's.
+                     submitted_for_order_ref — the EARLIER order that already
+                       had this image accepted. Must differ from this case's own
+                       order.external_order_ref, and the builder raises if it
+                       does not: core reads a prior proof naming the same order
+                       as an idempotent re-submission (a page refresh, a double
+                       tap) and lets the claim through, which silently un-does
+                       the scenario. Same trap as allocated_to_order_ref.
+                   Deliberately omitted: a perceptual hash. Measured over these
+                   30 receipts, every pHash cut-point that catches a genuine
+                   crop first catches dozens of unrelated pairs -- S01 and S06
+                   are entirely different payments with an IDENTICAL 256-bit
+                   pHash -- because one template with the numbers changed is
+                   what both a fixture corpus and a real payment app produce.
+                   See the measurement in backend/proofpay/core/proofs.py.
+    - order:       Expected order details (what customer ordered)
+    - expected:    Expected verification decision & reason code
+    - images:      Hash of the committed receipt JPEG (see `_image_meta`). Absent
+                   only on a case bootstrapped with --allow-missing-images, i.e.
+                   one whose receipt has not been rendered yet.
 """
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -37,8 +93,103 @@ from pk_data import (
 )
 
 
-def generate_manifest() -> dict:
-    """Build the complete 30-case demo manifest data structure."""
+def _image_meta(case_id: str, *, allow_missing: bool = False) -> dict | None:
+    """Hash the committed receipt JPEG so the manifest is genuinely self-generating.
+
+    This block used to be bolted on by tools/hash_images.py after the fact, so
+    re-running this script silently stripped `images` from every case and left
+    the extractor unable to find a single fixture (it resolves an upload by
+    sha256, and the API rejects any image it cannot map to a case). The images
+    themselves are committed and are never regenerated here — rendering them
+    needs Playwright and does not reproduce byte-for-byte across font and JPEG
+    encoder versions. This only records what is already on disk, and raises on
+    a missing file rather than emitting a manifest the extractor cannot use.
+
+    `allow_missing` exists to break a bootstrap deadlock, and for nothing else.
+    tools/render_receipts.py renders images BY READING manifest.json, so a case
+    that has never been rendered cannot be added at all while this function is
+    unconditionally fatal: the manifest will not build without the image, and
+    the image will not render without the manifest. With the flag set, the case
+    is emitted with NO `images` key at all — deliberately absent rather than
+    null, because `verifications._fixture_case_ids` does
+    `case.get("images", {}).get("sha256")`, which a null value turns into an
+    AttributeError while an absent key falls through harmlessly. Returning None
+    here means "omit"; see the caller.
+    """
+    image_path = REPO_ROOT / "fixtures" / "demo" / "images" / f"{case_id}.jpg"
+    if not image_path.exists():
+        if allow_missing:
+            print(
+                f"  WARNING {case_id}: no receipt image at {image_path}. Emitting the "
+                f"case with no `images` block. This manifest is a BOOTSTRAP ONLY: run "
+                f"tools/render_receipts.py --case {case_id}, then tools/tamper_receipts.py, "
+                f"then rebuild WITHOUT --allow-missing-images before committing."
+            )
+            return None
+        raise FileNotFoundError(
+            f"{case_id}: no receipt image at {image_path}. The images are committed "
+            f"fixtures; regenerate them with tools/render_receipts.py before rebuilding. "
+            f"If this is a BRAND NEW case that has never been rendered, render_receipts "
+            f"cannot see it until it is in the manifest: rebuild once with "
+            f"--allow-missing-images, render, then rebuild again without the flag."
+        )
+
+    payload = image_path.read_bytes()
+    return {
+        "delivered": f"images/{case_id}.jpg",
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "bytes": len(payload),
+    }
+
+
+def _resolve_prior_proofs(cases: list[dict]) -> None:
+    """Turn each `prior_proofs` entry's source case id into that case's sha256.
+
+    A case declares reuse by naming the case whose image it is re-sending
+    (`image_of_case`), not by pasting a hash. Hashes are 64 characters of noise
+    that no reviewer can check by eye, and they change whenever an image is
+    re-rendered -- pasting one in would create a fixture that silently stops
+    testing anything the next time the corpus is regenerated. The case id is
+    stable, and the join is resolved here from the same bytes `_image_meta`
+    hashes, so the two can never disagree.
+
+    Runs before the `images` pass so `prior_proofs` sits beside `allocations` in
+    the emitted JSON rather than trailing after the image block.
+    """
+    by_id = {case["id"]: case for case in cases}
+    for case in cases:
+        entries = case.setdefault("prior_proofs", [])
+        for entry in entries:
+            source_id = entry["image_of_case"]
+            source = by_id.get(source_id)
+            if source is None:
+                raise KeyError(
+                    f"{case['id']}: prior_proofs names case {source_id!r}, which does "
+                    f"not exist in this manifest."
+                )
+            image_path = REPO_ROOT / "fixtures" / "demo" / "images" / f"{source_id}.jpg"
+            if not image_path.exists():
+                raise FileNotFoundError(
+                    f"{case['id']}: prior_proofs names case {source_id!r}, whose image "
+                    f"{image_path} is missing. A reuse fixture cannot be built without "
+                    f"the bytes it claims to be reusing."
+                )
+            entry["sha256"] = hashlib.sha256(image_path.read_bytes()).hexdigest()
+            if entry["submitted_for_order_ref"] == case["order"]["external_order_ref"]:
+                raise ValueError(
+                    f"{case['id']}: prior_proofs points at this case's OWN order "
+                    f"{entry['submitted_for_order_ref']!r}. core reads that as an "
+                    f"idempotent re-submission and lets the claim straight through, "
+                    f"which silently un-does the scenario."
+                )
+
+
+def generate_manifest(*, allow_missing_images: bool = False) -> dict:
+    """Build the complete 30-case demo manifest data structure.
+
+    `allow_missing_images` is forwarded to `_image_meta` and is only ever set
+    when bootstrapping a case whose receipt has not been rendered yet.
+    """
 
     cases = []
 
@@ -63,16 +214,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -11,
             "raw_timestamp_text": "20 Aug 2026, 01:54 PM",
         },
-        "ledger": {
-            "rail": "easypaisa",
-            "amount_paisa": 150000,
-            "external_transaction_id": demo_txn_ref("easypaisa", 1),
-            "sender_name": "Bilal Ahmed Khan",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -12,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "easypaisa",
+                "amount_paisa": 150000,
+                "external_transaction_id": demo_txn_ref("easypaisa", 1),
+                "sender_name": "Bilal Ahmed Khan",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -12,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-G01",
             "expected_amount_paisa": 150000,
@@ -97,16 +251,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -20,
             "raw_timestamp_text": "20 Aug 2026, 01:45 PM",
         },
-        "ledger": {
-            "rail": "jazzcash",
-            "amount_paisa": 250000,
-            "external_transaction_id": demo_txn_ref("jazzcash", 2),
-            "sender_name": "Mohammad Usman Shaikh",  # Transliteration difference
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -21,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "jazzcash",
+                "amount_paisa": 250000,
+                "external_transaction_id": demo_txn_ref("jazzcash", 2),
+                "sender_name": "Mohammad Usman Shaikh",  # Transliteration difference
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -21,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-G02",
             "expected_amount_paisa": 250000,
@@ -144,16 +301,19 @@ def generate_manifest() -> dict:
                 "claimed_offset_min": -(idx * 5),
                 "raw_timestamp_text": "20 Aug 2026",
             },
-            "ledger": {
-                "rail": rail,
-                "amount_paisa": amt,
-                "external_transaction_id": demo_txn_ref(rail, idx),
-                "sender_name": sender if cid != "G07" else "Muhammad Bilal Shaikh",
-                "receiver_name": MERCHANT_RECEIVER,
-                "ledger_offset_min": -(idx * 5 + 1),
-                "status": "POSTED",
-                "trust_level": "SIMULATOR",
-            },
+            "ledger": [
+                {
+                    "rail": rail,
+                    "amount_paisa": amt,
+                    "external_transaction_id": demo_txn_ref(rail, idx),
+                    "sender_name": sender if cid != "G07" else "Muhammad Bilal Shaikh",
+                    "receiver_name": MERCHANT_RECEIVER,
+                    "ledger_offset_min": -(idx * 5 + 1),
+                    "status": "POSTED",
+                    "trust_level": "SIMULATOR",
+                },
+            ],
+            "allocations": [],
             "order": {
                 "external_order_ref": f"ORD-{cid}",
                 "expected_amount_paisa": order_amt,
@@ -181,7 +341,8 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -10,
             "raw_timestamp_text": "20 Aug 2026, 01:55 PM",
         },
-        "ledger": None,  # No transaction in ledger at all!
+        "ledger": [],  # No transaction in ledger at all!
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-U01",
             "expected_amount_paisa": 150000,
@@ -205,16 +366,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -2,
             "raw_timestamp_text": "20 Aug 2026, 02:03 PM",
         },
-        "ledger": {
-            "rail": "jazzcash",
-            "amount_paisa": 200000,
-            "external_transaction_id": demo_txn_ref("jazzcash", 20),
-            "sender_name": "Asad Ullah",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -2,
-            "status": "PENDING",  # Not posted yet!
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "jazzcash",
+                "amount_paisa": 200000,
+                "external_transaction_id": demo_txn_ref("jazzcash", 20),
+                "sender_name": "Asad Ullah",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -2,
+                "status": "PENDING",  # Not posted yet!
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-U02",
             "expected_amount_paisa": 200000,
@@ -238,7 +402,8 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -7200,  # 5 days ago
             "raw_timestamp_text": "15 Aug 2026, 02:05 PM",
         },
-        "ledger": None,
+        "ledger": [],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-U03",
             "expected_amount_paisa": 150000,
@@ -262,7 +427,8 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -15,
             "raw_timestamp_text": "20 Aug 2026, 01:50 PM",
         },
-        "ledger": None,
+        "ledger": [],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-U04",
             "expected_amount_paisa": 300000,
@@ -292,16 +458,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -10,
             "raw_timestamp_text": "20 Aug 2026, 01:55 PM",
         },
-        "ledger": {
-            "rail": "easypaisa",
-            "amount_paisa": 50000,   # 500 PKR (real ledger value)
-            "external_transaction_id": demo_txn_ref("easypaisa", 30),
-            "sender_name": "Shoaib Malik",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -11,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "easypaisa",
+                "amount_paisa": 50000,   # 500 PKR (real ledger value)
+                "external_transaction_id": demo_txn_ref("easypaisa", 30),
+                "sender_name": "Shoaib Malik",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -11,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-S01",
             "expected_amount_paisa": 500000,
@@ -327,16 +496,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -15,
             "raw_timestamp_text": "20 Aug 2026, 01:50 PM",
         },
-        "ledger": {
-            "rail": "jazzcash",
-            "amount_paisa": 150000,
-            "external_transaction_id": "JC0000311",  # Real TID in ledger
-            "sender_name": "Waseem Akram",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -16,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "jazzcash",
+                "amount_paisa": 150000,
+                "external_transaction_id": "JC0000311",  # Real TID in ledger
+                "sender_name": "Waseem Akram",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -16,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-S02",
             "expected_amount_paisa": 150000,
@@ -370,16 +542,19 @@ def generate_manifest() -> dict:
                 "claimed_offset_min": -10,
                 "raw_timestamp_text": "20 Aug 2026, 01:55 PM",
             },
-            "ledger": {
-                "rail": "easypaisa",
-                "amount_paisa": amt,
-                "external_transaction_id": f"EP{cid}999",
-                "sender_name": sender,
-                "receiver_name": MERCHANT_RECEIVER,
-                "ledger_offset_min": -11,
-                "status": "POSTED",
-                "trust_level": "SIMULATOR",
-            },
+            "ledger": [
+                {
+                    "rail": "easypaisa",
+                    "amount_paisa": amt,
+                    "external_transaction_id": f"EP{cid}999",
+                    "sender_name": sender,
+                    "receiver_name": MERCHANT_RECEIVER,
+                    "ledger_offset_min": -11,
+                    "status": "POSTED",
+                    "trust_level": "SIMULATOR",
+                },
+            ],
+            "allocations": [],
             "order": {
                 "external_order_ref": f"ORD-{cid}",
                 "expected_amount_paisa": amt * 2,
@@ -407,16 +582,29 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -11,
             "raw_timestamp_text": "20 Aug 2026, 01:54 PM",
         },
-        "ledger": {
-            "rail": "easypaisa",
-            "amount_paisa": 150000,
-            "external_transaction_id": demo_txn_ref("easypaisa", 1),
-            "sender_name": "Bilal Ahmed Khan",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -12,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "easypaisa",
+                "amount_paisa": 150000,
+                "external_transaction_id": demo_txn_ref("easypaisa", 1),
+                "sender_name": "Bilal Ahmed Khan",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -12,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        # G01 already consumed this exact transaction. R020 fires on the
+        # allocation, not on the image: without a record of the earlier claim
+        # the engine can only answer VERIFIED, which is how a rider gets paid
+        # twice for one transfer.
+        "allocations": [
+            {
+                "external_transaction_id": demo_txn_ref("easypaisa", 1),
+                "allocated_to_order_ref": "ORD-G01",
+                "allocated_offset_min": -11,
+            },
+        ],
         "order": {
             "external_order_ref": "ORD-D01",  # Second order trying to claim G01's payment
             "expected_amount_paisa": 150000,
@@ -440,16 +628,30 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -20,
             "raw_timestamp_text": "20 Aug 2026, 01:45 PM",
         },
-        "ledger": {
-            "rail": "jazzcash",
-            "amount_paisa": 250000,
-            "external_transaction_id": demo_txn_ref("jazzcash", 2),
-            "sender_name": "Muhammad Usman Sheikh",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -21,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "jazzcash",
+                "amount_paisa": 250000,
+                "external_transaction_id": demo_txn_ref("jazzcash", 2),
+                "sender_name": "Muhammad Usman Sheikh",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -21,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        # D02 gets NO allocation, deliberately. Handing it one would produce
+        # DUPLICATE through TXN_ALREADY_ALLOCATED -- the right status for the
+        # wrong reason, a green test papering over the missing feature. The
+        # reuse here is in the bytes: D02.jpg IS G02.jpg, and the only record
+        # that the picture has been spent already is this one.
+        "allocations": [],
+        "prior_proofs": [
+            {
+                "image_of_case": "G02",
+                "submitted_for_order_ref": "ORD-G02",
+            },
+        ],
         "order": {
             "external_order_ref": "ORD-D02",
             "expected_amount_paisa": 250000,
@@ -473,16 +675,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -15,
             "raw_timestamp_text": "20 Aug 2026, 01:50 PM",
         },
-        "ledger": {
-            "rail": "raast",
-            "amount_paisa": 350000,
-            "external_transaction_id": demo_txn_ref("raast", 3),
-            "sender_name": "Saad Tariq Qureshi",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -16,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "raast",
+                "amount_paisa": 350000,
+                "external_transaction_id": demo_txn_ref("raast", 3),
+                "sender_name": "Saad Tariq Qureshi",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -16,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-D03",
             "expected_amount_paisa": 350000,
@@ -506,16 +711,28 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -20,
             "raw_timestamp_text": "20 Aug 2026, 01:45 PM",
         },
-        "ledger": {
-            "rail": "bank",
-            "amount_paisa": 500000,
-            "external_transaction_id": demo_txn_ref("bank", 4),
-            "sender_name": "Faisal Javed Malik",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -21,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "bank",
+                "amount_paisa": 500000,
+                "external_transaction_id": demo_txn_ref("bank", 4),
+                "sender_name": "Faisal Javed Malik",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -21,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        # The rider is re-submitting Order #1's proof. ORD-G04 holds this
+        # transaction already; the order refs must differ or core reads the
+        # allocation as an idempotent re-verification and lets it through.
+        "allocations": [
+            {
+                "external_transaction_id": demo_txn_ref("bank", 4),
+                "allocated_to_order_ref": "ORD-G04",
+                "allocated_offset_min": -20,
+            },
+        ],
         "order": {
             "external_order_ref": "ORD-D04",
             "expected_amount_paisa": 500000,
@@ -544,16 +761,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -10,
             "raw_timestamp_text": "20 Aug 2026, 01:55 PM",
         },
-        "ledger": {
-            "rail": "easypaisa",
-            "amount_paisa": 120000,  # 1,200 PKR arrived
-            "external_transaction_id": demo_txn_ref("easypaisa", 50),
-            "sender_name": "Waqar Younis",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -11,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "easypaisa",
+                "amount_paisa": 120000,  # 1,200 PKR arrived
+                "external_transaction_id": demo_txn_ref("easypaisa", 50),
+                "sender_name": "Waqar Younis",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -11,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-N01",
             "expected_amount_paisa": 150000,  # Expected 1,500 PKR
@@ -578,16 +798,19 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -12,
             "raw_timestamp_text": "20 Aug 2026, 01:53 PM",
         },
-        "ledger": {
-            "rail": "jazzcash",
-            "amount_paisa": 500000,
-            "external_transaction_id": demo_txn_ref("jazzcash", 51),
-            "sender_name": "Junaid Jamshed",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -13,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "jazzcash",
+                "amount_paisa": 500000,
+                "external_transaction_id": demo_txn_ref("jazzcash", 51),
+                "sender_name": "Junaid Jamshed",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -13,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-N02",
             "expected_amount_paisa": 150000,
@@ -612,16 +835,35 @@ def generate_manifest() -> dict:
             "claimed_offset_min": -15,
             "raw_timestamp_text": "20 Aug 2026, 01:50 PM",
         },
-        "ledger": {
-            "rail": "easypaisa",
-            "amount_paisa": 150000,
-            "external_transaction_id": demo_txn_ref("easypaisa", 52),
-            "sender_name": "Irfan Khan",
-            "receiver_name": MERCHANT_RECEIVER,
-            "ledger_offset_min": -15,
-            "status": "POSTED",
-            "trust_level": "SIMULATOR",
-        },
+        "ledger": [
+            {
+                "rail": "easypaisa",
+                "amount_paisa": 150000,
+                "external_transaction_id": demo_txn_ref("easypaisa", 52),
+                "sender_name": "Irfan Khan",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -15,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+            {
+                # The twin. Identical in every scored field: same amount, same
+                # sender, same minute. Only the transaction id differs, because
+                # a feed cannot carry one id twice — and because `visible`'s
+                # reference_id is null, nothing on the receipt can tell the two
+                # apart. That is the whole case: the engine must decline to
+                # guess rather than pick the first row.
+                "rail": "easypaisa",
+                "amount_paisa": 150000,
+                "external_transaction_id": demo_txn_ref("easypaisa", 53),
+                "sender_name": "Irfan Khan",
+                "receiver_name": MERCHANT_RECEIVER,
+                "ledger_offset_min": -15,
+                "status": "POSTED",
+                "trust_level": "SIMULATOR",
+            },
+        ],
+        "allocations": [],
         "order": {
             "external_order_ref": "ORD-N03",
             "expected_amount_paisa": 150000,
@@ -653,16 +895,19 @@ def generate_manifest() -> dict:
                 "claimed_offset_min": -10,
                 "raw_timestamp_text": "20 Aug 2026" if cid != "N05" else None,
             },
-            "ledger": {
-                "rail": "jazzcash",
-                "amount_paisa": amt,
-                "external_transaction_id": demo_txn_ref("jazzcash", int(cid[1:]) + 50),
-                "sender_name": sender,
-                "receiver_name": MERCHANT_RECEIVER,
-                "ledger_offset_min": -11,
-                "status": "POSTED",
-                "trust_level": "SIMULATOR",
-            },
+            "ledger": [
+                {
+                    "rail": "jazzcash",
+                    "amount_paisa": amt,
+                    "external_transaction_id": demo_txn_ref("jazzcash", int(cid[1:]) + 50),
+                    "sender_name": sender,
+                    "receiver_name": MERCHANT_RECEIVER,
+                    "ledger_offset_min": -11,
+                    "status": "POSTED",
+                    "trust_level": "SIMULATOR",
+                },
+            ],
+            "allocations": [],
             "order": {
                 "external_order_ref": f"ORD-{cid}",
                 "expected_amount_paisa": amt,
@@ -672,6 +917,19 @@ def generate_manifest() -> dict:
                 "reason_code": "LOW_EXTRACTION_CONFIDENCE",
                 },
         })
+
+    # Attach the receipt hashes last, so `images` stays the final key of every
+    # case exactly where hash_images.py used to append it. A None back from
+    # `_image_meta` means "no image on disk and the caller said that is fine";
+    # the key is then left off entirely rather than set to null, because every
+    # reader in the repo guards with `case.get("images", {})` and a null value
+    # defeats that guard while an absent key does not.
+    _resolve_prior_proofs(cases)
+
+    for case in cases:
+        meta = _image_meta(case["id"], allow_missing=allow_missing_images)
+        if meta is not None:
+            case["images"] = meta
 
     # Master manifest structure
     manifest_data = {
@@ -693,16 +951,39 @@ def generate_manifest() -> dict:
 
 def main():
     """Generate manifest and write to fixtures/demo/manifest.json."""
-    manifest = generate_manifest()
+    parser = argparse.ArgumentParser(
+        description="Generate fixtures/demo/manifest.json from this script's case data."
+    )
+    parser.add_argument(
+        "--allow-missing-images",
+        action="store_true",
+        help=(
+            "Emit a case with no `images` block instead of aborting when its receipt "
+            "JPEG does not exist yet. Bootstrap only: render_receipts.py reads the "
+            "manifest, so a brand-new case needs one pass with this flag before its "
+            "image can be rendered. Rebuild without the flag before committing."
+        ),
+    )
+    args = parser.parse_args()
+
+    manifest = generate_manifest(allow_missing_images=args.allow_missing_images)
 
     out_dir = REPO_ROOT / "fixtures" / "demo"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / "manifest.json"
 
-    with open(out_file, "w", encoding="utf-8") as f:
+    # newline="\n" prevents a whole-file line-ending rewrite on Windows
+    # checkouts: without it Python translates all 1,100+ newlines to CRLF, and
+    # .gitattributes hides that in the diff while every sha256-of-the-manifest
+    # check sees a completely different file.
+    with open(out_file, "w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"✓ Manifest successfully written to: {out_file}")
+    # Plain ASCII, not a "✓": Python encodes stdout with the console codepage,
+    # which is cp1252 on a default Windows shell, and a UnicodeEncodeError here
+    # would exit 1 AFTER the manifest was written — a generator that reports
+    # failure on success is exactly how someone ends up hand-editing the JSON.
+    print(f"OK  Manifest successfully written to: {out_file}")
     print(f"  Total cases: {manifest['total_cases']}")
     for cat, count in manifest['category_counts'].items():
         print(f"    - {cat}: {count}")

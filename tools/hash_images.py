@@ -1,3 +1,20 @@
+"""SUPERSEDED — do not run this. Kept only so the history reads straight.
+
+`tools/build_manifest.py` now emits the `images` block itself (see
+`_image_meta`), which is what this script used to bolt on afterwards. Running
+it today does damage rather than work:
+
+  - `root` is hardcoded to C:/fastapi/proofpay, so it cannot find this checkout.
+  - It writes manifest.json with `open(..., "w")` and no `newline=`, so on
+    Windows every one of the ~1,100 line endings becomes CRLF. That is exactly
+    the failure `newline="\\n"` in build_manifest.py exists to prevent.
+  - It hand-edits a GENERATED file, so the next `python tools/build_manifest.py`
+    silently reverts whatever it did.
+
+To refresh the hashes after re-rendering a receipt, run
+`python tools/build_manifest.py`.
+"""
+
 import hashlib
 import json
 from pathlib import Path

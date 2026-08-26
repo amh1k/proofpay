@@ -31,6 +31,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from types import MappingProxyType
 from typing import Final
 
 from proofpay.core.compare.amount import (
@@ -68,9 +69,11 @@ from proofpay.core.models import (
     LedgerTxn,
     Order,
     PaymentClaim,
+    ProofFingerprint,
     ScoredCandidate,
 )
 from proofpay.core.normalize import normalize_name
+from proofpay.core.proofs import ProofIndex, ProofReport, check_proof, index_proofs
 from proofpay.core.reasons import (
     PARTIALLY_TRUSTED_SOURCES,
     TRUSTED_LEDGER_SOURCES,
@@ -82,6 +85,7 @@ from proofpay.core.retrieval import CandidateRanking, RetrievalResult, TxnIndex,
 
 __all__ = [
     "COMPARISONS",
+    "CONFIDENCE_KEYS",
     "ENGINE_VERSION",
     "SENDER_NAME",
     "TAMPER_OBSERVATION_CODES",
@@ -89,6 +93,7 @@ __all__ = [
     "aggregate_score",
     "confidence",
     "decide",
+    "doubted_fields",
     "first_match",
     "score_candidate",
     "scoring_idf",
@@ -97,7 +102,7 @@ __all__ = [
 #: Stamped on every `Decision` beside the ruleset version and policy
 #: fingerprint. Bump when the pipeline's behaviour changes, not when a
 #: docstring does.
-ENGINE_VERSION: Final[str] = "engine-1.0.0"
+ENGINE_VERSION: Final[str] = "engine-1.2.0"
 
 #: A transliterated Pakistani name is the weakest of the four signals - real
 #: customers share `Muhammad Ali`, receipts mask it, and OCR mangles it - so it
@@ -116,6 +121,31 @@ COMPARISONS: Final[tuple[Comparison, ...]] = (
     AMOUNT_MATCH,
     TIMESTAMP,
     SENDER_NAME,
+)
+
+#: Which keys of `PaymentClaim.field_confidences` speak for each scored field.
+#:
+#: `Comparison.field` is `core`'s own vocabulary and an extractor reports under
+#: the names it read off the receipt; the two were never negotiated, and this
+#: map is where that goes on the record instead of being discovered by a rule
+#: that silently never fires. MEASURED against the only extractor that reports
+#: confidences at all (`extraction/dashscope_ocr._build_field_evidence`), whose
+#: keys are `reference_id, amount, currency, sender_name, receiver_name,
+#: receiver_account, timestamp, status, provider`: three of the four scored
+#: fields already agree by name, and `reference` alone does not.
+#:
+#: The map is also the *filter*, not just a translation. `currency`, `status`
+#: and `provider` are read off the same receipt and are absent here on purpose:
+#: a field no comparison scored contributed nothing to the match, so a shaky
+#: reading of it is not a reason to stop an order. Only evidence the verdict
+#: actually rests on may hold the verdict up.
+CONFIDENCE_KEYS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        REFERENCE.field: ("reference", "reference_id"),
+        AMOUNT_MATCH.field: ("amount",),
+        TIMESTAMP.field: ("timestamp",),
+        SENDER_NAME.field: ("sender_name",),
+    }
 )
 
 #: Observations that count as *image tamper* signals for `R040`. Parsing notes
@@ -208,11 +238,51 @@ def aggregate_score(
       verification this system exists to refuse.
 
     So a missing field is excluded from the numerator but keeps a fraction
-    ``policy.missing_evidence_penalty`` of its weight in the denominator: it
-    never argues against a candidate, but the more of the receipt we could not
-    read, the harder it is to reach acceptance. With the default 0.25 an
-    otherwise-perfect match survives one unread field and a name-only claim
-    lands in review rather than in VERIFIED.
+    ``p = policy.missing_evidence_penalty`` of its weight in the denominator:
+    it never argues against a candidate, but the more of the receipt we could
+    not read, the harder it is to reach acceptance. An otherwise-perfect match
+    still survives one unread field, and a name-only claim still lands in
+    review rather than in VERIFIED.
+
+    **The invariant, and why `p` is not a free knob.** Removing evidence must
+    never *raise* a claim's aggregate. Cropping the sender's name off a receipt
+    has to make the receipt worse, or a fraud product is rewarding the crop.
+    Replacing a present outcome of weight ``w`` and score ``s`` with a MISSING
+    one takes ``N/D`` to ``(N - ws) / (D - w(1 - p))``, and that is no larger
+    than ``N/D`` exactly when ``s >= (N/D)(1 - p)``. Since the aggregate is
+    itself bounded by 1, ``s >= 1 - p`` guarantees it for every possible set of
+    sibling fields — which is the guarantee, because it holds whatever else is
+    on the receipt.
+
+    At ``p = 0.50`` that covers every AGREE and WEAK rung of every ladder except
+    ``NAME_COMMON_ONLY`` (0.20) and ``TS_HOUR_ART`` (0.25).
+    ``tests/core/test_properties.py`` enumerates the ladders against this bound
+    and pins those two by name in ``KNOWN_ABSENCE_EXPOSURES``, so lowering a
+    level score, or lowering ``p`` back, fails there rather than silently
+    reopening the hole.
+
+    **The CONTRADICT rungs are a different story, and it is an open one.** A
+    contradicted field scores 0, so ``s >= 1 - p`` needs ``p = 1`` -- and
+    ``p = 1`` *is* "score a missing field as a mismatch", the first of the two
+    wrong answers at the top of this docstring, which
+    ``test_an_unreadable_field_never_argues_against_a_candidate`` forbids
+    outright. The two properties are therefore in genuine tension: **no value of
+    ``p`` satisfies both.** Hiding a contradicted field really does help a
+    claim, and it helps it twice over, because it also removes the ``R075``
+    block that a contradiction would have put in front of the verification.
+    Measured through ``decide()``: a claim agreeing exactly on reference, amount
+    and time, under a sender name that flatly contradicts the transaction,
+    answers NEEDS_REVIEW / ``R075`` at an aggregate of 0.8235; blank that same
+    name and it answers VERIFIED / ``R090`` at 0.9032.
+
+    This is not closable by tuning, and it is not hidden: it is pinned in
+    ``KNOWN_VERDICT_EXPOSURES`` in ``tests/core/test_properties.py`` with a test
+    that walks it through the real engine, so it fails the day somebody closes
+    it and the pin has to be deleted rather than left there reassuring people.
+    Closing it means a rule -- the missing-field sibling of ``R075`` -- and that
+    rule would overturn two labelled scenarios asserting that a receipt which
+    never printed a field can still verify. That is a product decision, not a
+    tuning one; see ``DecisionPolicy.missing_evidence_penalty``.
 
     Weights come from `policy.field_weights()`, falling back to a comparison's
     own declared weight only for a field the policy has never heard of. A
@@ -268,6 +338,16 @@ class Context:
     #: candidate credible enough to compare against — see `build_context`.
     amount_compared: bool
     duplicates: DuplicateReport
+    #: What this merchant's proof history says about the submitted image. The
+    #: image sibling of `duplicates`, and empty whenever the caller passed no
+    #: history or the claim carries no content hash.
+    proofs: ProofReport
+    #: Scored fields the extractor reported low confidence in. `R067`'s
+    #: evidence. Kept as the field names rather than as a bare flag for the same
+    #: reason `contradicting_fields` is: the audit trail should record *which*
+    #: field the reader doubted, and a boolean throws that away at the one
+    #: moment somebody would want it.
+    low_confidence_fields: tuple[str, ...]
     observations: tuple[str, ...]
 
     @property
@@ -341,8 +421,28 @@ class Context:
         return self.amount.material_inflation
 
     @property
+    def material_overpayment(self) -> bool:
+        """Far more arrived than the order asked for. `R072`'s predicate.
+
+        Computed in `compare_amounts` from `overpayment_material_minor` and
+        `overpayment_material_pct`, so the cut-point is in the policy
+        fingerprint rather than in a lambda in the rule table.
+        """
+        return self.amount.material_overpayment
+
+    @property
     def best_is_allocated_elsewhere(self) -> bool:
         return self.duplicates.best_is_allocated_elsewhere
+
+    @property
+    def proof_reused(self) -> bool:
+        """This exact image was already accepted for another order. `R025`.
+
+        A fact about bytes rather than about the ranking, which is why it is
+        the one duplicate signal that does not read `self.ranking` at all — and
+        why `R025` sits where it does in the table. See `core/proofs.py`.
+        """
+        return self.proofs.is_reused
 
     @property
     def tamper_count(self) -> int:
@@ -377,6 +477,24 @@ class Context:
         `tau_accept` — so it is a rule, not a threshold.
         """
         return bool(self.contradicting_fields)
+
+    @property
+    def has_low_confidence_field(self) -> bool:
+        """`R067`'s predicate: a field this match rests on was read badly.
+
+        The claim-side twin of `best_partially_trusted`. That property asks how
+        much the *ledger* row can be trusted; this one asks the same question of
+        the *receipt*, and both have to be settled before any rule offers to
+        release goods. Distinct from `has_contradicting_field`: a contradicted
+        field was read clearly and disagrees, while this one may well agree —
+        the reader simply is not sure it read it.
+
+        Not expressible as a score. Discounting a doubted field in the aggregate
+        would make it behave like an absent one, and absence is already spoken
+        for by `missing_evidence_penalty`; "read, but not confidently" is a
+        third state, and the honest answer to it is a person.
+        """
+        return bool(self.low_confidence_fields)
 
 
 def first_match(ctx: Context, rules: Sequence[Rule] = RULES) -> Rule:
@@ -502,6 +620,12 @@ def _observations_for(ctx: Context) -> tuple[str, ...]:
     notes: list[str] = list(ctx.observations)
     notes.extend(ctx.claim.notes)
     notes.extend(ctx.amount.observations)
+    # Which earlier order this image already paid. Emitted whenever the history
+    # says so, not only when `R025` is the rule that fired: when a reused proof
+    # ALSO points at an allocated transaction, `R020` wins the verdict and the
+    # merchant is owed both facts. Never a verdict on its own — see
+    # `ObservationCode.PROOF_PREVIOUSLY_SUBMITTED`.
+    notes.extend(ctx.proofs.observations)
     best = ctx.best
     if best is not None:
         ts = best.outcomes.get(TIMESTAMP.field)
@@ -526,12 +650,21 @@ def _matched_txn_id(rule: Rule, ctx: Context) -> str | None:
     was only ever as good as the rule table's coverage of ambiguity: a tie that
     fell through to `R999` - which carries no reason codes at all - named one
     arbitrary winner out of two identical payments.
+
+    The third is `Rule.reads_ranking`, and it is that doctrine one step further
+    back: a rule that reached its verdict without looking at the candidates must
+    not point at one. `R025` decides on the image bytes alone, and the best
+    candidate for THIS order can contradict the receipt on every field - so
+    naming it produced a DUPLICATE screen describing a stranger's payment as the
+    payment behind the receipt. See the flag's comment in `rules_v1.py`.
     """
     if ctx.best is None:
         return None
     if rule.status is Status.UNMATCHED:
         return None
     if ctx.indistinguishable:
+        return None
+    if not rule.reads_ranking:
         return None
     return ctx.best.txn_id
 
@@ -561,6 +694,36 @@ def scoring_idf(index: TxnIndex, policy: DecisionPolicy) -> Mapping[str, float]:
     )
 
 
+def doubted_fields(
+    claim: PaymentClaim,
+    policy: DecisionPolicy,
+    comparisons: Sequence[Comparison] = COMPARISONS,
+) -> tuple[str, ...]:
+    """Scored fields whose extraction confidence falls under the policy bar.
+
+    Returned in `comparisons` order so two claims that doubted the same fields
+    produce the same tuple whatever order the extractor happened to report them
+    in — the same determinism rule the evidence rows follow.
+
+    A field is doubted when *any* key that speaks for it (see `CONFIDENCE_KEYS`)
+    came back under `min_field_confidence`. The minimum rather than the first
+    hit: if an extractor reports both `reference` and `reference_id` and is sure
+    of only one of them, it is not sure of the reference. A key the extractor
+    never mentioned is not a doubt — `confidence_for` defaults to 1.0, because
+    an extractor that reports no confidences at all (every offline path today)
+    must not thereby fail every verification.
+    """
+    doubted: list[str] = []
+    for comparison in comparisons:
+        keys = CONFIDENCE_KEYS.get(comparison.field, (comparison.field,))
+        reported = [
+            claim.field_confidences[key] for key in keys if key in claim.field_confidences
+        ]
+        if reported and min(reported) < policy.min_field_confidence:
+            doubted.append(comparison.field)
+    return tuple(doubted)
+
+
 def build_context(
     claim: PaymentClaim,
     order: Order | None,
@@ -570,6 +733,7 @@ def build_context(
     now: datetime,
     policy: DecisionPolicy,
     observations: Iterable[str] = (),
+    prior_proofs: Iterable[ProofFingerprint] | ProofIndex = (),
     name_idf: Mapping[str, float] | None = None,
 ) -> Context:
     """Everything before the rule table: retrieve, score, rank, gather.
@@ -588,6 +752,11 @@ def build_context(
         allocations
         if isinstance(allocations, AllocationIndex)
         else index_allocations(allocations)
+    )
+    proofs = (
+        prior_proofs
+        if isinstance(prior_proofs, ProofIndex)
+        else index_proofs(prior_proofs)
     )
     idf = name_idf if name_idf is not None else scoring_idf(index, policy)
 
@@ -632,6 +801,22 @@ def build_context(
             order_id=order.order_id if order is not None else None,
             allocations=allocs,
         ),
+        # Deliberately not conditioned on the ranking. Whether this image has
+        # been accepted before is true or false regardless of what the feed
+        # holds today, and gating it on a candidate would mean a reused
+        # screenshot stopped being reused the moment its transaction aged out
+        # of the retrieval window.
+        proofs=check_proof(
+            claim.proof_sha256,
+            order_id=order.order_id if order is not None else None,
+            proofs=proofs,
+        ),
+        # Read off the claim rather than off the ranking: how well the receipt
+        # was READ is a property of the receipt, and it is the same answer
+        # whichever candidate ends up winning. `R067` then guards it behind
+        # `>= tau_accept`, so a doubted field only ever adds a reason to stop --
+        # it can never rescue a claim that had no business verifying.
+        low_confidence_fields=doubted_fields(claim, policy),
         observations=_dedupe(observations),
     )
 
@@ -645,6 +830,7 @@ def decide(
     now: datetime,
     policy: DecisionPolicy,
     observations: Iterable[str] = (),
+    prior_proofs: Iterable[ProofFingerprint] | ProofIndex = (),
 ) -> Decision:
     """Verify one claim against one merchant's ledger. The engine's front door.
 
@@ -652,6 +838,15 @@ def decide(
     taken, it is stamped onto the result, and it is the only clock this layer
     has. `observations` carries image-forensics signals produced above `core`
     (which owns no image toolkit) as opaque `ObservationCode` strings.
+
+    `prior_proofs` is this merchant's already-accepted proof images, and it is
+    the exact sibling of `allocations`: rows a caller read from a store, which
+    core indexes and compares but never produces. Core hashes nothing — it is
+    told what the bytes were, on `PaymentClaim.proof_sha256` — so a caller that
+    passes nothing here simply gets no reuse finding, which is the honest answer
+    when there is no history to consult. Keyword-only with a default for the
+    same reason `observations` is: adding an input must not silently re-point
+    the four positional arguments at every existing call site.
     """
     ctx = build_context(
         claim,
@@ -661,6 +856,7 @@ def decide(
         now=now,
         policy=policy,
         observations=observations,
+        prior_proofs=prior_proofs,
     )
     rule = first_match(ctx)
     evidence = ctx.evidence

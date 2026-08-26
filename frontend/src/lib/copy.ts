@@ -28,6 +28,24 @@ export const UPLOAD_HINT = 'or paste it, or pick one of the examples below'
 export const UPLOAD_META =
   'Your provider SMS is already in ProofPay. The screenshot is only the claim.'
 
+/* ── choosing the order ─────────────────────────────────────────────────────
+ * A screenshot is never checked on its own — it is checked AGAINST an order, and
+ * the merchant is the only one who knows which. These three lines are the whole
+ * of that conversation. Rule 1 applies here too: they talk about the order and
+ * the money, never about the customer.
+ *
+ * Rendered through the `cap` class, which uppercases; they are written lower-case
+ * in source to match the other captions on that screen. */
+
+/** The caption above the picker. It is a question because it is asking for one. */
+export const ORDER_PICKER_HINT = 'which order is this payment for?'
+
+/** Why "Check this payment" is not available yet. Says what to do, not what is wrong. */
+export const ORDER_REQUIRED = 'choose the order above first'
+
+/** Nothing to pick. Says what WE know, in the register of rule 2. */
+export const ORDER_NONE = 'no orders are waiting for a payment right now'
+
 export const CHECKING_TITLE = 'Checking against the payments that arrived'
 
 /** The bottom nav strip. Counts come from `DashboardSummary`. */
@@ -166,6 +184,25 @@ export function verdictCopy(result: VerificationResult): VerdictCopy {
       }
 
     case 'DUPLICATE':
+      // Two different accusations wear this one status word, and rule 1 makes
+      // the distinction the product rather than a nicety. A reused TRANSACTION
+      // means the money arrived once and is being spent twice. A reused
+      // SCREENSHOT means the picture is a re-run — the payment behind it may be
+      // perfectly good, and the merchant's next move is to ask for a fresh
+      // receipt rather than to go hunting through an earlier order's money.
+      // Saying "this payment was already used" on a reused screenshot states
+      // something the engine did not find, and the customer can prove it wrong.
+      if (result.reasons.includes('PROOF_REUSED')) {
+        return {
+          lede:
+            'This is the same screenshot that was already used for an earlier order. The picture is a copy, not a second payment.',
+          advice,
+          reply:
+            'This receipt was already sent to me for an earlier order. Please send a fresh payment for this one.',
+          note: null,
+          actions,
+        }
+      }
       return {
         lede:
           'This payment was already used for an earlier order. The money arrived once, not twice.',

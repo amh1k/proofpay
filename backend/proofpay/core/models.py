@@ -41,6 +41,7 @@ __all__ = [
     "LedgerTxn",
     "Order",
     "PaymentClaim",
+    "ProofFingerprint",
     "ScoredCandidate",
 ]
 
@@ -56,6 +57,15 @@ class PaymentClaim:
     claim_id: str
     merchant_id: str | None = None
     proof_id: str | None = None
+    #: Content hash of the proof image, lowercase hex sha256. The contrast with
+    #: `proof_id` above is the whole point of the field: `proof_id` names the
+    #: *submission* (the API mints a fresh uuid per upload, so the same picture
+    #: sent twice gets two of them), while this names the *bytes*, which is the
+    #: only thing that can be recognised across two submissions. `None` when the
+    #: caller did not hash the image; core never hashes anything itself, so an
+    #: extractor path that reports nothing here simply cannot produce a reuse
+    #: finding — see `core/proofs.py`.
+    proof_sha256: str | None = None
 
     provider: str | None = None          # "easypaisa", "jazzcash", "raast", ...
     amount: Money | None = None          # claimed amount, minor units
@@ -139,6 +149,41 @@ class Allocation:
     order_id: str
     verification_id: str | None = None
     allocated_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProofFingerprint:
+    """One proof image this merchant has already accepted, by content hash.
+
+    The exact sibling of `Allocation`, one layer over: an `Allocation` records
+    that a *transaction* was consumed by an order, and this records that an
+    *image* was. Both are read from a store by a caller and handed to the
+    engine; neither is computed inside `core`, which owns no image toolkit and
+    no database.
+
+    `order_id` is what makes the record worth keeping. "This picture has been
+    seen before" is a curiosity; "this picture already paid order ORD-1041" is
+    something a merchant can act on, and it is also what separates fraud from a
+    page refresh — see `check_proof`.
+    """
+
+    #: Lowercase hex sha256 of the image bytes, exactly as `PaymentClaim.proof_sha256`.
+    sha256: str
+    #: The order this proof was accepted for. `None` for a proof recorded with
+    #: no order attached, which can never be exempted as a re-submission. This
+    #: is the INTERNAL id, and the same-order exemption in `check_proof` is an
+    #: equality test on it, so it must stay the id and never the reference.
+    order_id: str | None = None
+    #: What the merchant calls that order — `Order.reference`, e.g. `ORD-1041`.
+    #: Carried alongside the id rather than instead of it because the two do
+    #: different jobs: the id decides whether this is reuse, and the reference
+    #: is the only half a merchant can look up. `PROOF_PREVIOUSLY_SUBMITTED`
+    #: publishing `order_demo_1001` — an identifier that appears nowhere in the
+    #: merchant's own order list — is a row telling somebody to go and find a
+    #: thing that, as far as they can see, does not exist.
+    order_ref: str | None = None
+    verification_id: str | None = None
+    submitted_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

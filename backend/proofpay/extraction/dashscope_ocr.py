@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import re
 import time
 
 import dashscope
@@ -25,6 +26,11 @@ from proofpay.extraction.errors import (
     ExtractionRefused,
     ExtractionTimeout,
     ExtractionUnavailable,
+)
+from proofpay.extraction.normalize import (
+    normalize_msisdn,
+    parse_amount,
+    parse_timestamp,
 )
 from proofpay.extraction.preprocess import PreparedImage
 from proofpay.extraction.schema import (
@@ -70,6 +76,96 @@ CALL_TIMEOUT_S = 12
 
 # Status codes that must never be retried
 _NO_RETRY_CODES = {400, 401, 403, 404}
+
+# ── Field-level checks behind `confidence_band` ─────────────────────────────
+#
+# These decide whether this reader is willing to say it read a field WELL, and
+# `core`'s `R067` is the only thing that consumes the answer. Two rules govern
+# everything below:
+#
+#   1. Only a check that RAN and FAILED may return False. "Not checked" is
+#      `None`, and `compute_confidence_band` treats it as no evidence either
+#      way. The alternative — pessimism-by-default — is what banded every
+#      cloud-read field `low` and would have sent every Qwen-VL verification to
+#      manual review.
+#   2. A field nothing scores is not worth refuting. `currency`, `status` and
+#      `provider` are read off the receipt and deliberately have no validator:
+#      `engine.CONFIDENCE_KEYS` never looks them up, so a doubt about them
+#      could only ever be noise on the evidence panel.
+
+#: A reference as a receipt prints one: no spaces, four or more characters, and
+#: nothing but the characters a provider actually uses in a TID. Anything else
+#: is the reader having captured a label, a line-wrap or half a sentence rather
+#: than an identifier.
+_REFERENCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/_-]{3,63}$")
+
+#: Pakistani IBANs are `PK` + 2 check digits + 4 bank letters + 16 digits, but
+#: this stays generic: a receipt may print an account at a foreign bank, and the
+#: question here is only "is this shaped like an account identifier".
+_IBAN_RE = re.compile(r"^[A-Za-z]{2}[0-9]{2}[A-Za-z0-9]{11,30}$")
+
+#: Reduced to the characters a comparison can survive: case folded, and every
+#: separator a receipt or a model might add or drop (spaces, commas, dots,
+#: dashes, currency marks) removed. `Rs. 1,500` and `Rs 1500` squash alike.
+_NOISE_RE = re.compile(r"[^0-9a-z]+")
+
+
+def _squash(text: str | None) -> str:
+    """Case-folded alphanumerics only. Empty string when there is nothing."""
+    if not text:
+        return ""
+    return _NOISE_RE.sub("", text.casefold())
+
+
+def _grounded(raw_text: str | None, haystack: str) -> bool | None:
+    """Did the detector's own text contain this value? True, or *unknown*.
+
+    Never False — see `_build_field_evidence` for why that is deliberate and
+    what would have to be measured before it changes. `None` covers both "no
+    OCR text came back" and "came back without this value in it", because this
+    layer genuinely cannot tell those apart from a value the KIE head
+    reformatted on the way out.
+    """
+    needle = _squash(raw_text)
+    if not needle or not haystack:
+        return None
+    return True if needle in haystack else None
+
+
+def _format_valid(field_name: str, raw_text: str | None) -> bool | None:
+    """Does the printed text parse as the thing this field claims to be?
+
+    Handed to the SAME parsers `extraction/service._normalise` will run on it
+    downstream, so a `False` here always means a real consequence there: an
+    amount that fails this check is an amount `PaymentClaim` will carry as
+    `None`. `None` is returned for every field with no meaningful format to
+    check against — a name and a provider are whatever the receipt printed.
+    """
+    if not raw_text:
+        return None
+    text = raw_text.strip()
+    match field_name:
+        case "amount":
+            return parse_amount(text) is not None
+        case "timestamp":
+            return parse_timestamp(text) is not None
+        case "receiver_account":
+            # A mobile number OR an IBAN: `normalize_msisdn` answers only the
+            # first, and `service._normalise` explicitly keeps an unrecognised
+            # value as raw rather than dropping it, so an IBAN must not be
+            # reported as a badly-read phone number.
+            if normalize_msisdn(text) is not None:
+                return True
+            return _IBAN_RE.match(text.replace(" ", "")) is not None
+        case "reference_id":
+            return _REFERENCE_RE.match(text) is not None
+        case "sender_name" | "receiver_name":
+            # The weakest check that still catches a real failure: a name that
+            # contains no letter at all is a row label or a stray amount, not a
+            # person. Anything stricter starts refusing Urdu script, single
+            # names, and businesses called `24/7 Mart`.
+            return any(character.isalpha() for character in text)
+    return None
 
 
 class DashScopeOcrExtractor:
@@ -153,11 +249,16 @@ class DashScopeOcrExtractor:
         # Map KIE output to our RawClaim schema
         raw_claim = self._map_to_raw_claim(kv)
 
-        # Build field evidence
-        fields = self._build_field_evidence(raw_claim, kv)
-
-        # Also get full OCR text if available
+        # The full OCR text is read BEFORE the field evidence, not after, because
+        # the evidence is grounded against it: `words_info` is what the detector
+        # actually saw on the page, and `kv_result` is what the KIE head made of
+        # it. Two outputs of one pass, but not the same output — a value present
+        # in the second and absent from the first came from the model rather than
+        # from the receipt.
         ocr_text = self._extract_ocr_text(response)
+
+        # Build field evidence
+        fields = self._build_field_evidence(raw_claim, kv, ocr_text)
 
         return ExtractionResult(
             claim=raw_claim,
@@ -256,9 +357,39 @@ class DashScopeOcrExtractor:
         return Maybe(absent_reason="not_present")
 
     def _build_field_evidence(
-        self, claim: RawClaim, kv: dict[str, str]
+        self, claim: RawClaim, kv: dict[str, str], ocr_text: str | None = None
     ) -> list[FieldEvidence]:
-        """Build per-field evidence records from the extraction."""
+        """Build per-field evidence records, running the checks the band needs.
+
+        Both checks used to be `None` with a "will be set later" comment, and
+        nothing ever set them. Because `compute_confidence_band` treated an
+        unchecked field as a doubted one, that TODO quietly banded EVERY field
+        this reader could read as `low` — and once `R067` started reading
+        confidences, that meant no receipt extracted by Qwen-VL could return
+        VERIFIED. A check nobody performs must not masquerade as a check that
+        failed; these are the checks, actually performed.
+
+        **Format validation** is the one that can refute, and it is entirely
+        deterministic: the field's printed text is handed to the same parser
+        that `service._normalise` will use on it, and a value that parser
+        cannot read is a value this reader did not read well enough to carry a
+        verification. That is exactly what `LOW_EXTRACTION_CONFIDENCE` says —
+        a statement about our reader, never about the customer.
+
+        **Grounding** is positive-only, and that is a deliberate limitation
+        rather than an oversight. `kv_result` is the KIE head's answer and
+        `words_info` is the detector's; finding the value in the detector's
+        text is real evidence the characters were on the page. NOT finding it
+        is ambiguous: the KIE head is free to normalise what it returns
+        (`Rs. 1,500.00` for a printed `1,500`), so an unmatched value is a
+        reformatting artefact at least as often as it is a hallucination, and
+        nobody here has measured which. Until somebody does — against captured
+        responses, not against an intuition — an unmatched value is recorded as
+        *unknown* and refutes nothing. Calling it a hallucination on a guess
+        would put the demo's headline VERIFIED one string-normalisation quirk
+        away from becoming NEEDS_REVIEW, which is the failure this whole method
+        is being rewritten to remove.
+        """
         evidence = []
         field_map = {
             "reference_id": claim.reference_id,
@@ -271,12 +402,16 @@ class DashScopeOcrExtractor:
             "status": claim.status_text,
             "provider": claim.provider_hint,
         }
+        haystack = _squash(ocr_text)
 
         for field_name, maybe_field in field_map.items():
             has_value = maybe_field.ok
+            raw_text = maybe_field.raw_text if has_value else None
+            grounded = _grounded(raw_text, haystack) if has_value else None
+            format_valid = _format_valid(field_name, raw_text) if has_value else None
             band = compute_confidence_band(
-                grounded=None,  # Will be set later by grounding check
-                format_valid=None,  # Will be set later by template validation
+                grounded=grounded,
+                format_valid=format_valid,
                 agreement="single_source",
                 has_value=has_value,
             )
@@ -284,8 +419,10 @@ class DashScopeOcrExtractor:
                 FieldEvidence(
                     field=field_name,
                     value=maybe_field.value if has_value else None,
-                    raw_text=maybe_field.raw_text if has_value else None,
+                    raw_text=raw_text,
                     source="vlm_kie" if has_value else "none",
+                    grounded=grounded,
+                    format_valid=format_valid,
                     absent_reason=(
                         maybe_field.absent_reason if not has_value else None
                     ),

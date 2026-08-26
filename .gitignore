@@ -19,6 +19,11 @@ backend/storage/
 # Track B's Python storage adapter is source code, not runtime data.
 !backend/proofpay/storage/
 !backend/proofpay/storage/**
+# ...but re-exclude bytecode, which the line above would otherwise drag back in.
+# A negation re-includes EVERYTHING under the path, so the `__pycache__/` rule at
+# the top of this file stops applying inside it — which is how five .pyc files
+# came to be committed here.
+backend/proofpay/storage/__pycache__/
 
 # Node
 node_modules/

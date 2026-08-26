@@ -24,6 +24,34 @@ export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH'
  */
 export type Agreement = 'AGREE' | 'WEAK' | 'CONTRADICT' | 'MISSING'
 
+/**
+ * An order waiting for its payment to be checked — one button in the picker.
+ *
+ * This is the FIRST thing the merchant touches: a screenshot on its own means
+ * nothing, because "is this payment real" is really "is this payment real FOR
+ * THIS ORDER". The engine needs the order to know what amount was expected, and
+ * whether the transaction on the receipt has already been spent on something
+ * else. Submitting without one is how the app ended up checking every upload
+ * against whichever order happened to be first in the list.
+ *
+ * Mirrors `OrderView` in `backend/proofpay/api/v1/schemas.py` field for field.
+ * `expected_amount_minor` is paisa, like every other amount here — render it
+ * through `formatMoney`, never by hand.
+ */
+export interface Order {
+  /** The engine's id, e.g. `"order_demo_1002"`. Sent as `order_id` on submit. */
+  id: string
+  /** What the merchant calls it, e.g. `"ORD-S01"`. This is what goes on screen. */
+  external_order_ref: string
+  /** What this order is waiting for, in paisa. */
+  expected_amount_minor: number
+  currency: string
+  /** Free-form on the wire. Every demo order is `"PAYMENT_REVIEW"`. */
+  status: string
+  assigned_verifier_name: string | null
+  created_at: string
+}
+
 /** One row of the result screen: what was claimed vs what the bank actually has. */
 export interface EvidenceItem {
   field: string

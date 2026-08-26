@@ -27,12 +27,44 @@ from proofpay.extraction.normalize import (
 from proofpay.extraction.preprocess import PreparedImage, prepare
 from proofpay.extraction.schema import ExtractionResult, RawClaim
 
-__all__ = ["ExtractionService", "build_extractor"]
+__all__ = ["ExtractionService", "build_extractor", "field_confidences_from"]
 
 logger = logging.getLogger(__name__)
 
 # Path to the demo manifest for the offline stub
 _MANIFEST_PATH = Path(__file__).parents[2] / ".." / "fixtures" / "demo" / "manifest.json"
+
+
+def field_confidences_from(fields) -> dict[str, float]:
+    """Confidence bands -> the numbers `DecisionPolicy.min_field_confidence` reads.
+
+    A module-level function rather than four lines inside `_normalise`, because
+    this is the join between two layers that were written apart, and a test that
+    wants to ask "what does the cloud reader's output do to the engine?" has to
+    be able to run the real mapping rather than a second copy of it. A second
+    copy is exactly how the seam went unnoticed for as long as it did: the only
+    test that touched the extractor's bands called it with every field absent,
+    so every band was `none` and the all-`low` behaviour never appeared.
+
+    Three bands, and only two of them report anything:
+
+        high -> 1.0
+        low  -> 0.5
+        none -> no key at all, which `PaymentClaim.confidence_for` reads as the
+                fully-confident default. Absence of a value is handled by the
+                MISSING rung on the comparison ladder, not by doubt.
+
+    So the live scale is two points wide, which is why
+    `DecisionPolicy.min_field_confidence` is documented as a band switch rather
+    than a tuned number.
+    """
+    confidences: dict[str, float] = {}
+    for evidence in fields:
+        if evidence.confidence_band == "high":
+            confidences[evidence.field] = 1.0
+        elif evidence.confidence_band == "low":
+            confidences[evidence.field] = 0.5
+    return confidences
 
 
 def build_extractor(api_key: str | None = None, mode: str = "auto"):
@@ -221,14 +253,10 @@ class ExtractionService:
         for obs in result.tamper_observations:
             notes.append(f"{obs.code}:{obs.detail}")
 
-        # Build field confidences from evidence
-        field_confidences = {}
-        for fe in result.fields:
-            if fe.confidence_band == "high":
-                field_confidences[fe.field] = 1.0
-            elif fe.confidence_band == "low":
-                field_confidences[fe.field] = 0.5
-            # "none" → not reported (absent key = fully confident default)
+        # Build field confidences from evidence. The mapping lives at module
+        # level so a test can run THIS one rather than a copy of it — see
+        # `field_confidences_from`.
+        field_confidences = field_confidences_from(result.fields)
 
         return PaymentClaim(
             claim_id=claim_id,

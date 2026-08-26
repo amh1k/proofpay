@@ -2,35 +2,37 @@
   "items": [
     {
       "id": "ver_verified",
-      "order_id": "ORD-1041",
+      "order_id": "order_demo_1001",
       "status": "VERIFIED",
       "stage": "COMPLETE",
       "risk": "LOW",
-      "confidence": 1.0,
+      "confidence": 0.929,
       "claim": {
-        "id": "clm_verified",
-        "provider": null,
-        "amount_minor": 200000,
+        "proof_id": "ver_verified",
+        "provider": "easypaisa",
+        "amount_minor": 150000,
         "currency": "PKR",
         "sender_name": "Bilal Ahmed Khan",
-        "reference_id": "EP2481009",
-        "occurred_at": "2026-08-20T05:22:00+00:00"
+        "receiver_name": "Ali Traders",
+        "reference_id": "EP0000011",
+        "occurred_at": "2026-08-20T08:54:00Z"
       },
       "matched_transaction": {
-        "id": "EP2481009",
+        "id": "EP0000011",
         "provider": "easypaisa",
-        "amount_minor": 200000,
+        "masked_reference": "EP\u2022\u2022\u2022\u202211",
+        "amount_minor": 150000,
         "currency": "PKR",
-        "sender_name": "Bilal Ahmed Khan",
-        "occurred_at": "2026-08-20T05:22:00+00:00"
+        "occurred_at": "2026-08-20T08:53:00Z",
+        "status": "POSTED"
       },
-      "matched_txn_id": "EP2481009",
+      "matched_txn_id": "EP0000011",
       "reasons": [
         "STRONG_FIELD_AGREEMENT",
         "AMOUNT_EXACT",
         "CLAIM_CONSISTENT"
       ],
-      "summary": "Rs 2,000 received.\nTransaction EP2481009 matches the submitted proof.",
+      "summary": "Rs 1,500 received.\nTransaction EP0000011 matches the submitted proof.",
       "fired_rule_id": "R090",
       "evidence": [
         {
@@ -39,8 +41,19 @@
           "label": "Amount matches the transaction exactly",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "Rs 2000.00",
-          "recorded_value": "Rs 2000.00"
+          "claimed_value": "Rs 1,500",
+          "recorded_value": "Rs 1,500",
+          "detail": {
+            "claim_minor": 150000,
+            "ledger_minor": 150000,
+            "both_present": true,
+            "same_currency": true,
+            "diff_minor": 0,
+            "equal": true,
+            "within_tolerance": true,
+            "scaled": false,
+            "t_tolerance_minor": 0
+          }
         },
         {
           "field": "reference",
@@ -48,17 +61,74 @@
           "label": "Transaction ID matches exactly",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "EP2481009",
-          "recorded_value": "EP2481009"
+          "claimed_value": "EP0000011",
+          "recorded_value": "EP0000011",
+          "detail": {
+            "left_norm": "EP0000011",
+            "right_norm": "EP0000011",
+            "both_present": true,
+            "equal": true,
+            "confusable_equal": false,
+            "is_suffix": false,
+            "contains": false,
+            "common_suffix_len": 9,
+            "shorter_len": 9,
+            "longer_len": 9,
+            "t_min_partial_len": 4
+          }
         },
         {
           "field": "sender_name",
-          "level_code": "NAME_EXACT",
-          "label": "Exact match",
-          "score": 1.0,
-          "agreement": "AGREE",
+          "level_code": "NAME_COMMON_ONLY",
+          "label": "Only a very common name matched",
+          "score": 0.2,
+          "agreement": "WEAK",
           "claimed_value": "Bilal Ahmed Khan",
-          "recorded_value": "Bilal Ahmed Khan"
+          "recorded_value": "Bilal Ahmed Khan",
+          "detail": {
+            "claim_tokens": [
+              "bilal",
+              "ahmad",
+              "khan"
+            ],
+            "truth_tokens": [
+              "bilal",
+              "ahmad",
+              "khan"
+            ],
+            "both_present": true,
+            "t_strong": 0.92,
+            "t_initials": 0.8,
+            "t_pair_min": 0.7,
+            "t_common_idf": 0.3,
+            "token_score": 1.0,
+            "idf_weighted_score": 0.15,
+            "matched_idf_mass": 0.44999999999999996,
+            "initials_compatible": false,
+            "pairs": [
+              [
+                "ahmad",
+                "ahmad",
+                1.0
+              ],
+              [
+                "bilal",
+                "bilal",
+                1.0
+              ],
+              [
+                "khan",
+                "khan",
+                1.0
+              ]
+            ],
+            "unmatched_truth": [],
+            "mask_present": false,
+            "mask_consistent": false,
+            "mask_hidden_chars": 0,
+            "mask_pairs": [],
+            "pair_count": 3
+          }
         },
         {
           "field": "timestamp",
@@ -66,52 +136,72 @@
           "label": "Same time as the transaction",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "2026-08-20T05:22:00+00:00",
-          "recorded_value": "2026-08-20T05:22:00+00:00"
+          "claimed_value": "2026-08-20 13:54",
+          "recorded_value": "2026-08-20 13:53",
+          "detail": {
+            "delta_s": 60.0,
+            "abs_delta_s": 60.0,
+            "gap_s": 60.0,
+            "sim": 1.0,
+            "offset_s": 120.0,
+            "scale_s": 900.0,
+            "hour_offset": null,
+            "precise": true,
+            "date_inferred": false,
+            "granularity_s": 60,
+            "tz_stated": false,
+            "t_sim_tight": 0.98,
+            "t_sim_close": 0.8,
+            "t_sim_loose": 0.4
+          }
         }
       ],
       "observations": [
-        "TIME_TZ_ASSUMED"
+        "IMAGE_PHASH:phash:c8515d593daa6ab6eab6a5149151125b6ebb6abcb36da514251404cd5adb1adb; dhash:8306070003000d009f2491982806ac13a002b042b803ac92805c085e10000000",
+        "TIME_TZ_ASSUMED",
+        "NAME_COMMON_TOKENS_ONLY"
       ],
       "recommended_action": "Continue with the order. The payment is in your transaction feed.",
-      "ruleset_version": "rules-v1.5.0",
-      "policy_fingerprint": "1b269461a49561ff",
-      "engine_version": "engine-1.0.0",
-      "evaluated_at": "2026-08-20T16:00:00+05:00",
-      "created_at": "2026-08-20T10:57:00+00:00",
+      "ruleset_version": "rules-v1.9.0",
+      "policy_fingerprint": "199ffd919575d72d",
+      "engine_version": "engine-1.2.0",
+      "evaluated_at": "2026-08-20T09:05:00Z",
+      "created_at": "2026-08-20T09:05:00Z",
       "degraded": false,
-      "_note": "Genuine payment. Every field agrees."
+      "_note": "Genuine payment. Every field agrees and the money is in the feed."
     },
     {
       "id": "ver_suspicious",
-      "order_id": "ORD-1042",
+      "order_id": "order_demo_1002",
       "status": "SUSPICIOUS",
       "stage": "COMPLETE",
       "risk": "HIGH",
-      "confidence": 0.887,
+      "confidence": 0.834,
       "claim": {
-        "id": "clm_suspicious",
-        "provider": null,
+        "proof_id": "ver_suspicious",
+        "provider": "easypaisa",
         "amount_minor": 500000,
         "currency": "PKR",
-        "sender_name": "Muhammad Ali",
-        "reference_id": "JC7730114",
-        "occurred_at": "2026-08-20T10:42:00+00:00"
+        "sender_name": "Shoaib Malik",
+        "receiver_name": "Ali Traders",
+        "reference_id": "EP0000303",
+        "occurred_at": "2026-08-20T08:55:00Z"
       },
       "matched_transaction": {
-        "id": "JC7730114",
-        "provider": "jazzcash",
+        "id": "EP0000303",
+        "provider": "easypaisa",
+        "masked_reference": "EP\u2022\u2022\u2022\u202203",
         "amount_minor": 50000,
         "currency": "PKR",
-        "sender_name": "M. Ali",
-        "occurred_at": "2026-08-20T10:42:00+00:00"
+        "occurred_at": "2026-08-20T08:53:00Z",
+        "status": "POSTED"
       },
-      "matched_txn_id": "JC7730114",
+      "matched_txn_id": "EP0000303",
       "reasons": [
         "CLAIM_INFLATED",
         "AMOUNT_UNDERPAID"
       ],
-      "summary": "A transaction was found, but the details conflict.",
+      "summary": "The screenshot claims Rs 5,000, but Rs 500 was received.",
       "fired_rule_id": "R030",
       "evidence": [
         {
@@ -120,8 +210,19 @@
           "label": "Amount differs by a factor of ten",
           "score": 0.35,
           "agreement": "CONTRADICT",
-          "claimed_value": "Rs 5000.00",
-          "recorded_value": "Rs 500.00"
+          "claimed_value": "Rs 5,000",
+          "recorded_value": "Rs 500",
+          "detail": {
+            "claim_minor": 500000,
+            "ledger_minor": 50000,
+            "both_present": true,
+            "same_currency": true,
+            "diff_minor": 450000,
+            "equal": false,
+            "within_tolerance": false,
+            "scaled": true,
+            "t_tolerance_minor": 0
+          }
         },
         {
           "field": "reference",
@@ -129,17 +230,67 @@
           "label": "Transaction ID matches exactly",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "JC7730114",
-          "recorded_value": "JC7730114"
+          "claimed_value": "EP0000303",
+          "recorded_value": "EP0000303",
+          "detail": {
+            "left_norm": "EP0000303",
+            "right_norm": "EP0000303",
+            "both_present": true,
+            "equal": true,
+            "confusable_equal": false,
+            "is_suffix": false,
+            "contains": false,
+            "common_suffix_len": 9,
+            "shorter_len": 9,
+            "longer_len": 9,
+            "t_min_partial_len": 4
+          }
         },
         {
           "field": "sender_name",
-          "level_code": "NAME_INITIALS",
-          "label": "Match with initials expanded",
-          "score": 0.8,
-          "agreement": "AGREE",
-          "claimed_value": "Muhammad Ali",
-          "recorded_value": "M. Ali"
+          "level_code": "NAME_COMMON_ONLY",
+          "label": "Only a very common name matched",
+          "score": 0.2,
+          "agreement": "WEAK",
+          "claimed_value": "Shoaib Malik",
+          "recorded_value": "Shoaib Malik",
+          "detail": {
+            "claim_tokens": [
+              "shoaib",
+              "malik"
+            ],
+            "truth_tokens": [
+              "shoaib",
+              "malik"
+            ],
+            "both_present": true,
+            "t_strong": 0.92,
+            "t_initials": 0.8,
+            "t_pair_min": 0.7,
+            "t_common_idf": 0.3,
+            "token_score": 1.0,
+            "idf_weighted_score": 0.15,
+            "matched_idf_mass": 0.3,
+            "initials_compatible": false,
+            "pairs": [
+              [
+                "malik",
+                "malik",
+                1.0
+              ],
+              [
+                "shoaib",
+                "shoaib",
+                1.0
+              ]
+            ],
+            "unmatched_truth": [],
+            "mask_present": false,
+            "mask_consistent": false,
+            "mask_hidden_chars": 0,
+            "mask_pairs": [],
+            "pair_count": 2
+          }
         },
         {
           "field": "timestamp",
@@ -147,49 +298,68 @@
           "label": "Same time as the transaction",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "2026-08-20T10:42:00+00:00",
-          "recorded_value": "2026-08-20T10:42:00+00:00"
+          "claimed_value": "2026-08-20 13:55",
+          "recorded_value": "2026-08-20 13:53",
+          "detail": {
+            "delta_s": 120.0,
+            "abs_delta_s": 120.0,
+            "gap_s": 120.0,
+            "sim": 1.0,
+            "offset_s": 120.0,
+            "scale_s": 900.0,
+            "hour_offset": null,
+            "precise": true,
+            "date_inferred": false,
+            "granularity_s": 60,
+            "tz_stated": false,
+            "t_sim_tight": 0.98,
+            "t_sim_close": 0.8,
+            "t_sim_loose": 0.4
+          }
         }
       ],
       "observations": [
+        "IMAGE_PHASH:phash:c8555d593dba6bb6eba5a5149151125b4a7b6abeb30da114251444cd5adb1adb; dhash:8306070013100d009f2491982806ac03a00ab002b803ac92805c085e10000000",
         "CLAIM_INFLATED_ROUND",
         "TIME_TZ_ASSUMED",
         "NAME_COMMON_TOKENS_ONLY"
       ],
       "recommended_action": "Do not approve the order yet.",
-      "ruleset_version": "rules-v1.5.0",
-      "policy_fingerprint": "1b269461a49561ff",
-      "engine_version": "engine-1.0.0",
-      "evaluated_at": "2026-08-20T16:00:00+05:00",
-      "created_at": "2026-08-20T10:50:00+00:00",
+      "ruleset_version": "rules-v1.9.0",
+      "policy_fingerprint": "199ffd919575d72d",
+      "engine_version": "engine-1.2.0",
+      "evaluated_at": "2026-08-20T09:05:00Z",
+      "created_at": "2026-08-20T09:05:00Z",
       "degraded": false,
       "_note": "The screenshot claims Rs 5,000; Rs 500 arrived. The flagship demo."
     },
     {
       "id": "ver_duplicate",
-      "order_id": "ORD-1145",
+      "order_id": "order_demo_1003",
       "status": "DUPLICATE",
       "stage": "COMPLETE",
       "risk": "HIGH",
-      "confidence": 1.0,
+      "confidence": 0.929,
       "claim": {
-        "id": "clm_duplicate",
-        "provider": null,
-        "amount_minor": 300000,
+        "proof_id": "ver_duplicate",
+        "provider": "easypaisa",
+        "amount_minor": 150000,
         "currency": "PKR",
-        "sender_name": "Sara Khan",
-        "reference_id": "EP2481103",
-        "occurred_at": "2026-08-20T05:43:00+00:00"
+        "sender_name": "Bilal Ahmed Khan",
+        "receiver_name": "Ali Traders",
+        "reference_id": "EP0000011",
+        "occurred_at": "2026-08-20T08:54:00Z"
       },
       "matched_transaction": {
-        "id": "EP2481103",
+        "id": "EP0000011",
         "provider": "easypaisa",
-        "amount_minor": 300000,
+        "masked_reference": "EP\u2022\u2022\u2022\u202211",
+        "amount_minor": 150000,
         "currency": "PKR",
-        "sender_name": "Sara Khan",
-        "occurred_at": "2026-08-20T05:43:00+00:00"
+        "occurred_at": "2026-08-20T08:53:00Z",
+        "status": "POSTED"
       },
-      "matched_txn_id": "EP2481103",
+      "matched_txn_id": "EP0000011",
       "reasons": [
         "TXN_ALREADY_ALLOCATED",
         "AMOUNT_EXACT",
@@ -204,8 +374,19 @@
           "label": "Amount matches the transaction exactly",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "Rs 3000.00",
-          "recorded_value": "Rs 3000.00"
+          "claimed_value": "Rs 1,500",
+          "recorded_value": "Rs 1,500",
+          "detail": {
+            "claim_minor": 150000,
+            "ledger_minor": 150000,
+            "both_present": true,
+            "same_currency": true,
+            "diff_minor": 0,
+            "equal": true,
+            "within_tolerance": true,
+            "scaled": false,
+            "t_tolerance_minor": 0
+          }
         },
         {
           "field": "reference",
@@ -213,83 +394,21 @@
           "label": "Transaction ID matches exactly",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "EP2481103",
-          "recorded_value": "EP2481103"
-        },
-        {
-          "field": "sender_name",
-          "level_code": "NAME_EXACT",
-          "label": "Exact match",
-          "score": 1.0,
-          "agreement": "AGREE",
-          "claimed_value": "Sara Khan",
-          "recorded_value": "Sara Khan"
-        },
-        {
-          "field": "timestamp",
-          "level_code": "TS_TIGHT",
-          "label": "Same time as the transaction",
-          "score": 1.0,
-          "agreement": "AGREE",
-          "claimed_value": "2026-08-20T05:43:00+00:00",
-          "recorded_value": "2026-08-20T05:43:00+00:00"
-        }
-      ],
-      "observations": [
-        "TIME_TZ_ASSUMED"
-      ],
-      "recommended_action": "Do not approve the order. This payment was already used for another order \u2014 check that order before doing anything else.",
-      "ruleset_version": "rules-v1.5.0",
-      "policy_fingerprint": "1b269461a49561ff",
-      "engine_version": "engine-1.0.0",
-      "evaluated_at": "2026-08-20T16:00:00+05:00",
-      "created_at": "2026-08-20T10:43:00+00:00",
-      "degraded": false,
-      "_note": "A real transaction, already used to pay for a different order."
-    },
-    {
-      "id": "ver_needs_review",
-      "order_id": "ORD-1150",
-      "status": "NEEDS_REVIEW",
-      "stage": "COMPLETE",
-      "risk": "MEDIUM",
-      "confidence": 0.512,
-      "claim": {
-        "id": "clm_needs_review",
-        "provider": null,
-        "amount_minor": 25000,
-        "currency": "PKR",
-        "sender_name": "Muhammad Ali",
-        "reference_id": null,
-        "occurred_at": "2026-08-20T09:00:00+00:00"
-      },
-      "matched_transaction": null,
-      "matched_txn_id": null,
-      "reasons": [
-        "AMBIGUOUS_CANDIDATES",
-        "AMOUNT_EXACT",
-        "CLAIM_CONSISTENT"
-      ],
-      "summary": "More than one transaction matches this screenshot equally well.",
-      "fired_rule_id": "R050",
-      "evidence": [
-        {
-          "field": "amount",
-          "level_code": "AMT_EXACT",
-          "label": "Amount matches the transaction exactly",
-          "score": 1.0,
-          "agreement": "AGREE",
-          "claimed_value": "Rs 250.00",
-          "recorded_value": null
-        },
-        {
-          "field": "reference",
-          "level_code": "REF_MISSING",
-          "label": "No transaction ID to compare",
-          "score": 0.0,
-          "agreement": "MISSING",
-          "claimed_value": null,
-          "recorded_value": null
+          "claimed_value": "EP0000011",
+          "recorded_value": "EP0000011",
+          "detail": {
+            "left_norm": "EP0000011",
+            "right_norm": "EP0000011",
+            "both_present": true,
+            "equal": true,
+            "confusable_equal": false,
+            "is_suffix": false,
+            "contains": false,
+            "common_suffix_len": 9,
+            "shorter_len": 9,
+            "longer_len": 9,
+            "t_min_partial_len": 4
+          }
         },
         {
           "field": "sender_name",
@@ -297,8 +416,52 @@
           "label": "Only a very common name matched",
           "score": 0.2,
           "agreement": "WEAK",
-          "claimed_value": "Muhammad Ali",
-          "recorded_value": null
+          "claimed_value": "Bilal Ahmed Khan",
+          "recorded_value": "Bilal Ahmed Khan",
+          "detail": {
+            "claim_tokens": [
+              "bilal",
+              "ahmad",
+              "khan"
+            ],
+            "truth_tokens": [
+              "bilal",
+              "ahmad",
+              "khan"
+            ],
+            "both_present": true,
+            "t_strong": 0.92,
+            "t_initials": 0.8,
+            "t_pair_min": 0.7,
+            "t_common_idf": 0.3,
+            "token_score": 1.0,
+            "idf_weighted_score": 0.15,
+            "matched_idf_mass": 0.44999999999999996,
+            "initials_compatible": false,
+            "pairs": [
+              [
+                "ahmad",
+                "ahmad",
+                1.0
+              ],
+              [
+                "bilal",
+                "bilal",
+                1.0
+              ],
+              [
+                "khan",
+                "khan",
+                1.0
+              ]
+            ],
+            "unmatched_truth": [],
+            "mask_present": false,
+            "mask_consistent": false,
+            "mask_hidden_chars": 0,
+            "mask_pairs": [],
+            "pair_count": 3
+          }
         },
         {
           "field": "timestamp",
@@ -306,38 +469,218 @@
           "label": "Same time as the transaction",
           "score": 1.0,
           "agreement": "AGREE",
-          "claimed_value": "2026-08-20T09:00:00+00:00",
-          "recorded_value": null
+          "claimed_value": "2026-08-20 13:54",
+          "recorded_value": "2026-08-20 13:53",
+          "detail": {
+            "delta_s": 60.0,
+            "abs_delta_s": 60.0,
+            "gap_s": 60.0,
+            "sim": 1.0,
+            "offset_s": 120.0,
+            "scale_s": 900.0,
+            "hour_offset": null,
+            "precise": true,
+            "date_inferred": false,
+            "granularity_s": 60,
+            "tz_stated": false,
+            "t_sim_tight": 0.98,
+            "t_sim_close": 0.8,
+            "t_sim_loose": 0.4
+          }
         }
       ],
       "observations": [
+        "IMAGE_PHASH:phash:c8515d593daa6ab6eab6a5149151125b6ebb6abcb36da514251404cd5adb1adb; dhash:8306070003000d009f2491982806ac13a002b042b803ac92805c085e10000000",
+        "TIME_TZ_ASSUMED",
+        "NAME_COMMON_TOKENS_ONLY"
+      ],
+      "recommended_action": "Do not approve the order. This payment was already used for another order \u2014 check that order before doing anything else.",
+      "ruleset_version": "rules-v1.9.0",
+      "policy_fingerprint": "199ffd919575d72d",
+      "engine_version": "engine-1.2.0",
+      "evaluated_at": "2026-08-20T09:05:00Z",
+      "created_at": "2026-08-20T09:05:00Z",
+      "degraded": false,
+      "_note": "A real transaction, already spent on an earlier order."
+    },
+    {
+      "id": "ver_needs_review",
+      "order_id": "order_demo_1004",
+      "status": "NEEDS_REVIEW",
+      "stage": "COMPLETE",
+      "risk": "MEDIUM",
+      "confidence": 0.929,
+      "claim": {
+        "proof_id": "ver_needs_review",
+        "provider": "easypaisa",
+        "amount_minor": 120000,
+        "currency": "PKR",
+        "sender_name": "Waqar Younis",
+        "receiver_name": "Ali Traders",
+        "reference_id": "EP0000505",
+        "occurred_at": "2026-08-20T08:55:00Z"
+      },
+      "matched_transaction": {
+        "id": "EP0000505",
+        "provider": "easypaisa",
+        "masked_reference": "EP\u2022\u2022\u2022\u202205",
+        "amount_minor": 120000,
+        "currency": "PKR",
+        "occurred_at": "2026-08-20T08:53:00Z",
+        "status": "POSTED"
+      },
+      "matched_txn_id": "EP0000505",
+      "reasons": [
+        "AMOUNT_UNDERPAID",
+        "CLAIM_CONSISTENT"
+      ],
+      "summary": "Rs 1,200 was received against an order for Rs 1,500.",
+      "fired_rule_id": "R070",
+      "evidence": [
+        {
+          "field": "amount",
+          "level_code": "AMT_EXACT",
+          "label": "Amount matches the transaction exactly",
+          "score": 1.0,
+          "agreement": "AGREE",
+          "claimed_value": "Rs 1,200",
+          "recorded_value": "Rs 1,200",
+          "detail": {
+            "claim_minor": 120000,
+            "ledger_minor": 120000,
+            "both_present": true,
+            "same_currency": true,
+            "diff_minor": 0,
+            "equal": true,
+            "within_tolerance": true,
+            "scaled": false,
+            "t_tolerance_minor": 0
+          }
+        },
+        {
+          "field": "reference",
+          "level_code": "REF_EXACT",
+          "label": "Transaction ID matches exactly",
+          "score": 1.0,
+          "agreement": "AGREE",
+          "claimed_value": "EP0000505",
+          "recorded_value": "EP0000505",
+          "detail": {
+            "left_norm": "EP0000505",
+            "right_norm": "EP0000505",
+            "both_present": true,
+            "equal": true,
+            "confusable_equal": false,
+            "is_suffix": false,
+            "contains": false,
+            "common_suffix_len": 9,
+            "shorter_len": 9,
+            "longer_len": 9,
+            "t_min_partial_len": 4
+          }
+        },
+        {
+          "field": "sender_name",
+          "level_code": "NAME_COMMON_ONLY",
+          "label": "Only a very common name matched",
+          "score": 0.2,
+          "agreement": "WEAK",
+          "claimed_value": "Waqar Younis",
+          "recorded_value": "Waqar Younis",
+          "detail": {
+            "claim_tokens": [
+              "waqar",
+              "younis"
+            ],
+            "truth_tokens": [
+              "waqar",
+              "younis"
+            ],
+            "both_present": true,
+            "t_strong": 0.92,
+            "t_initials": 0.8,
+            "t_pair_min": 0.7,
+            "t_common_idf": 0.3,
+            "token_score": 1.0,
+            "idf_weighted_score": 0.15,
+            "matched_idf_mass": 0.3,
+            "initials_compatible": false,
+            "pairs": [
+              [
+                "waqar",
+                "waqar",
+                1.0
+              ],
+              [
+                "younis",
+                "younis",
+                1.0
+              ]
+            ],
+            "unmatched_truth": [],
+            "mask_present": false,
+            "mask_consistent": false,
+            "mask_hidden_chars": 0,
+            "mask_pairs": [],
+            "pair_count": 2
+          }
+        },
+        {
+          "field": "timestamp",
+          "level_code": "TS_TIGHT",
+          "label": "Same time as the transaction",
+          "score": 1.0,
+          "agreement": "AGREE",
+          "claimed_value": "2026-08-20 13:55",
+          "recorded_value": "2026-08-20 13:53",
+          "detail": {
+            "delta_s": 120.0,
+            "abs_delta_s": 120.0,
+            "gap_s": 120.0,
+            "sim": 1.0,
+            "offset_s": 120.0,
+            "scale_s": 900.0,
+            "hour_offset": null,
+            "precise": true,
+            "date_inferred": false,
+            "granularity_s": 60,
+            "tz_stated": false,
+            "t_sim_tight": 0.98,
+            "t_sim_close": 0.8,
+            "t_sim_loose": 0.4
+          }
+        }
+      ],
+      "observations": [
+        "IMAGE_PHASH:phash:c8555d593dba6ab6eba5a5149051125b6a7b6abeb30da114251444cf5adb1adb; dhash:8306070003000d009f2491982806ac0ba00ab002b803ac92805c085e10000000",
         "TIME_TZ_ASSUMED",
         "NAME_COMMON_TOKENS_ONLY"
       ],
       "recommended_action": "Check this payment yourself before approving the order.",
-      "ruleset_version": "rules-v1.5.0",
-      "policy_fingerprint": "1b269461a49561ff",
-      "engine_version": "engine-1.0.0",
-      "evaluated_at": "2026-08-20T16:00:00+05:00",
-      "created_at": "2026-08-20T10:36:00+00:00",
+      "ruleset_version": "rules-v1.9.0",
+      "policy_fingerprint": "199ffd919575d72d",
+      "engine_version": "engine-1.2.0",
+      "evaluated_at": "2026-08-20T09:05:00Z",
+      "created_at": "2026-08-20T09:05:00Z",
       "degraded": false,
-      "_note": "Two transactions match equally well; the receipt's ID is unreadable."
+      "_note": "Rs 1,200 arrived against a Rs 1,500 order. A person decides this one."
     },
     {
       "id": "ver_unmatched",
-      "order_id": "ORD-1151",
+      "order_id": "order_demo_1005",
       "status": "UNMATCHED",
       "stage": "COMPLETE",
       "risk": "MEDIUM",
       "confidence": 0.3,
       "claim": {
-        "id": "clm_unmatched",
-        "provider": null,
-        "amount_minor": 175000,
+        "proof_id": "ver_unmatched",
+        "provider": "easypaisa",
+        "amount_minor": 150000,
         "currency": "PKR",
-        "sender_name": "Ayesha Siddiqui",
-        "reference_id": "RA9910044",
-        "occurred_at": "2026-08-20T04:05:00+00:00"
+        "sender_name": "Tariq Mahmood",
+        "receiver_name": "Ali Traders",
+        "reference_id": "EP99999999",
+        "occurred_at": "2026-08-20T08:55:00Z"
       },
       "matched_transaction": null,
       "matched_txn_id": null,
@@ -347,13 +690,15 @@
       "summary": "No matching transaction was found in your feed.",
       "fired_rule_id": "R010",
       "evidence": [],
-      "observations": [],
+      "observations": [
+        "IMAGE_PHASH:phash:c8555d593dba6ab6eba6a5149151125b6a7a6abcb32da114251404cd5adf1afb; dhash:8306070003000d009f249190280aac1ba002b002b803ac92805c085e10000000"
+      ],
       "recommended_action": "Do not approve yet. The payment may still be processing \u2014 check again shortly, or look through your transaction feed.",
-      "ruleset_version": "rules-v1.5.0",
-      "policy_fingerprint": "1b269461a49561ff",
-      "engine_version": "engine-1.0.0",
-      "evaluated_at": "2026-08-20T16:00:00+05:00",
-      "created_at": "2026-08-20T10:29:00+00:00",
+      "ruleset_version": "rules-v1.9.0",
+      "policy_fingerprint": "199ffd919575d72d",
+      "engine_version": "engine-1.2.0",
+      "evaluated_at": "2026-08-20T09:05:00Z",
+      "created_at": "2026-08-20T09:05:00Z",
       "degraded": false,
       "_note": "Nothing corresponds to this claim. NOT fraud - it may still be settling."
     }

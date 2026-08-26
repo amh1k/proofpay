@@ -39,6 +39,7 @@ __all__ = [
     "ClaimIntegrity",
     "compare_amounts",
     "is_material_inflation",
+    "is_material_overpayment",
     "is_power_of_ten_multiple",
 ]
 
@@ -54,6 +55,8 @@ class AmountPolicy(Protocol):
     amount_tolerance_minor: int
     inflation_material_minor: int
     inflation_material_pct: float
+    overpayment_material_minor: int
+    overpayment_material_pct: float
 
 
 class AmountRelation(StrEnum):
@@ -89,6 +92,12 @@ class AmountEvidence:
     inflation: Money | None  # claim - ledger; positive means the proof over-claims
     within_tolerance: bool  # shortfall inside policy.amount_tolerance_minor
     material_inflation: bool = False  # big enough to accuse someone over
+    #: Axis A's magnitude qualifier, and the mirror of `material_inflation` on
+    #: axis B: the money arrived, nobody is lying, and far more of it arrived
+    #: than the order asked for. Its own field rather than a number the rule
+    #: table re-derives, so the threshold that produced it lives in the policy
+    #: fingerprint and the audit trail records what the rule fired on.
+    material_overpayment: bool = False
     observations: tuple[str, ...] = ()  # neutral notes, ObservationCode values
 
     @property
@@ -115,6 +124,25 @@ class AmountEvidence:
                 codes.append(ReasonCode.AMOUNT_UNDERPAID)
             case AmountRelation.OVER:
                 codes.append(ReasonCode.AMOUNT_OVERPAID)
+                # The magnitude qualifier follows from the arithmetic exactly as
+                # the direction does, so it is derived here rather than carried
+                # only by `R072`. It used to be `R072`'s alone, and that made a
+                # large overpayment invisible whenever any rule above `R072`
+                # took the claim: `R065` (an imported ledger row) and `R067` (a
+                # field the reader was unsure of) both outrank it, and
+                # `explain._summary` gates the overpayment sentence on this
+                # code -- so a merchant sent to review over a Rs 5,000 payment
+                # against a Rs 1,500 order was told only that part of the
+                # screenshot was hard to read. Not one word that 3x the order
+                # total had arrived and somebody would want it back.
+                #
+                # The sibling shortfall code has always been derived, which is
+                # why the underpaid case never had this hole, and
+                # `explain._summary` argues the principle in its own comment:
+                # the merchant is owed both facts, not whichever one the
+                # winning rule happens to be about.
+                if self.material_overpayment:
+                    codes.append(ReasonCode.AMOUNT_OVERPAID_MATERIAL)
             case AmountRelation.UNKNOWN:
                 codes.append(ReasonCode.MISSING_ORDER_AMOUNT)
         match self.integrity:
@@ -169,6 +197,39 @@ def is_material_inflation(
     return inflation_minor >= policy.inflation_material_pct * ledger_minor
 
 
+def is_material_overpayment(
+    overpayment_minor: int, expected_minor: int, policy: AmountPolicy
+) -> bool:
+    """Is this overpayment big enough that a human should look at it?
+
+    The commercial-axis mirror of ``is_material_inflation``, and deliberately
+    the same shape: both knobs must be cleared (**and**, not **or**), so the
+    judgement scales with the size of the order while keeping an absolute
+    floor, and setting either knob to 0 disables that half cleanly.
+
+    * ``overpayment_material_minor`` -- a floor. A customer rounding up, or
+      adding delivery money on top, is not a case for a human.
+    * ``overpayment_material_pct`` -- a proportion of the **order total**, not
+      of what arrived. The question a merchant is deciding is "how much more
+      than I asked for is this?", and the order total is the thing being asked
+      about. (``is_material_inflation`` uses the ledger amount as its base
+      because ``order.expected`` is not always on file *there*; here the
+      comparison is meaningless without it, and ``AmountRelation.OVER`` already
+      implies an expectation exists.)
+
+    Why this is worth a rule at all: a customer paying Rs. 200 too much has
+    covered the order and then some, and stopping that order to fetch a human
+    costs more than the Rs. 200. A customer paying three times the order total
+    has either fat-fingered a digit or sent another order's money, and in both
+    cases somebody is going to ask for it back.
+    """
+    if overpayment_minor <= 0:
+        return False
+    if overpayment_minor < policy.overpayment_material_minor:
+        return False
+    return overpayment_minor >= policy.overpayment_material_pct * expected_minor
+
+
 def is_power_of_ten_multiple(claim_minor: int, ledger_minor: int) -> bool:
     """Is the claim exactly the ledger amount with zeros appended?
 
@@ -214,6 +275,7 @@ def compare_amounts(
         # the underpayment rule from firing on an order that never named a
         # price; MISSING_ORDER_AMOUNT carries the caveat instead.
         within_tolerance = True
+        material_over = False
     else:
         shortfall = expected - ledger
         relation = _relation(shortfall.minor)
@@ -221,6 +283,12 @@ def compare_amounts(
         # Written out rather than abs() so no reader mistakes this magnitude
         # test for the signed comparison above, which must never collapse.
         within_tolerance = -tolerance <= shortfall.minor <= tolerance
+        # `shortfall` is signed: OVER means it is negative, so the overpayment
+        # is its negation. Guarded on the relation rather than on the sign so
+        # that an EXACT match can never be read as a zero-sized overpayment.
+        material_over = relation is AmountRelation.OVER and is_material_overpayment(
+            -shortfall.minor, expected.minor, policy
+        )
 
     if claim is None:
         integrity = ClaimIntegrity.UNKNOWN
@@ -242,5 +310,6 @@ def compare_amounts(
         inflation=inflation,
         within_tolerance=within_tolerance,
         material_inflation=material,
+        material_overpayment=material_over,
         observations=tuple(observations),
     )

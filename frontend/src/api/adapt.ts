@@ -27,6 +27,7 @@ import type {
   DashboardSummary,
   EvidenceItem,
   MatchedTransaction,
+  Order,
   PaymentClaimView,
   RiskLevel,
   VerificationResult,
@@ -226,6 +227,53 @@ export function adaptVerification(value: Json): VerificationResult {
     created_at: str(raw.created_at) ?? '',
     degraded: bool(raw.degraded, false),
   }
+}
+
+/* ── the orders ────────────────────────────────────────────────────────────── */
+
+/**
+ * The orders the merchant picks between, from `GET /orders`.
+ *
+ * Both dialects are already the same shape here — `src/mocks/orders.json` is
+ * dumped straight out of the backend's own `STUB_ORDERS` by
+ * `scripts/generate_api_mocks.py` — so this adapter exists to GUARD, not to
+ * translate. Every row it returns is one a button can be honestly built from.
+ *
+ * A row missing an id, a reference or an amount is DROPPED, the same way an
+ * unreadable status is dropped from the history. The alternative is a button
+ * reading "— · Rs —" that posts an empty `order_id` and comes back a 404 in
+ * front of the room, or worse, one labelled with a made-up figure. There is no
+ * default that is better than not offering the order at all.
+ *
+ * The list order is the server's own and is never re-sorted: `engine_demo` picks
+ * it deliberately (the happy path first, then the failures) so the buttons do not
+ * move between runs and slide out from under the presenter's finger.
+ */
+export function adaptOrders(value: Json): Order[] {
+  const raw = obj(value)
+  const items = arr(raw?.items ?? value)
+
+  const out: Order[] = []
+  for (const item of items) {
+    const row = obj(item)
+    if (row === null) continue
+
+    const id = str(row.id)
+    const reference = str(row.external_order_ref)
+    const expected = int(row.expected_amount_minor)
+    if (id === null || reference === null || expected === null) continue
+
+    out.push({
+      id,
+      external_order_ref: reference,
+      expected_amount_minor: expected,
+      currency: str(row.currency) ?? 'PKR',
+      status: str(row.status) ?? '',
+      assigned_verifier_name: str(row.assigned_verifier_name),
+      created_at: str(row.created_at) ?? '',
+    })
+  }
+  return out
 }
 
 /* ── the list ──────────────────────────────────────────────────────────────── */
