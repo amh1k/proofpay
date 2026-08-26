@@ -44,6 +44,31 @@ DATA MODEL PER CASE:
                    and nothing reads it) and an ACTIVE/RELEASED `status` (no
                    case needs a released allocation yet, and an unconsumed key
                    is how ledger.status sat decorative for months).
+    - prior_proofs: LIST of EARLIER SUBMISSIONS OF THIS CASE'S OWN IMAGE. Present
+                   (usually empty) on every case, for the same reason
+                   `allocations` is. The allocation sibling one layer up: an
+                   allocation records that a TRANSACTION was already consumed,
+                   this records that the IMAGE was. Each entry is:
+                     image_of_case — the case whose receipt this one is
+                       re-sending. `_resolve_prior_proofs` turns it into that
+                       case's `sha256` at build time, so no 64-character hash is
+                       ever pasted in by hand and the join survives a re-render.
+                       For an exact-reuse fixture the two cases share a JPEG
+                       byte for byte, which is why D02's image IS G02's.
+                     submitted_for_order_ref — the EARLIER order that already
+                       had this image accepted. Must differ from this case's own
+                       order.external_order_ref, and the builder raises if it
+                       does not: core reads a prior proof naming the same order
+                       as an idempotent re-submission (a page refresh, a double
+                       tap) and lets the claim through, which silently un-does
+                       the scenario. Same trap as allocated_to_order_ref.
+                   Deliberately omitted: a perceptual hash. Measured over these
+                   30 receipts, every pHash cut-point that catches a genuine
+                   crop first catches dozens of unrelated pairs -- S01 and S06
+                   are entirely different payments with an IDENTICAL 256-bit
+                   pHash -- because one template with the numbers changed is
+                   what both a fixture corpus and a real payment app produce.
+                   See the measurement in backend/proofpay/core/proofs.py.
     - order:       Expected order details (what customer ordered)
     - expected:    Expected verification decision & reason code
     - images:      Hash of the committed receipt JPEG (see `_image_meta`). Absent
@@ -115,6 +140,48 @@ def _image_meta(case_id: str, *, allow_missing: bool = False) -> dict | None:
         "sha256": hashlib.sha256(payload).hexdigest(),
         "bytes": len(payload),
     }
+
+
+def _resolve_prior_proofs(cases: list[dict]) -> None:
+    """Turn each `prior_proofs` entry's source case id into that case's sha256.
+
+    A case declares reuse by naming the case whose image it is re-sending
+    (`image_of_case`), not by pasting a hash. Hashes are 64 characters of noise
+    that no reviewer can check by eye, and they change whenever an image is
+    re-rendered -- pasting one in would create a fixture that silently stops
+    testing anything the next time the corpus is regenerated. The case id is
+    stable, and the join is resolved here from the same bytes `_image_meta`
+    hashes, so the two can never disagree.
+
+    Runs before the `images` pass so `prior_proofs` sits beside `allocations` in
+    the emitted JSON rather than trailing after the image block.
+    """
+    by_id = {case["id"]: case for case in cases}
+    for case in cases:
+        entries = case.setdefault("prior_proofs", [])
+        for entry in entries:
+            source_id = entry["image_of_case"]
+            source = by_id.get(source_id)
+            if source is None:
+                raise KeyError(
+                    f"{case['id']}: prior_proofs names case {source_id!r}, which does "
+                    f"not exist in this manifest."
+                )
+            image_path = REPO_ROOT / "fixtures" / "demo" / "images" / f"{source_id}.jpg"
+            if not image_path.exists():
+                raise FileNotFoundError(
+                    f"{case['id']}: prior_proofs names case {source_id!r}, whose image "
+                    f"{image_path} is missing. A reuse fixture cannot be built without "
+                    f"the bytes it claims to be reusing."
+                )
+            entry["sha256"] = hashlib.sha256(image_path.read_bytes()).hexdigest()
+            if entry["submitted_for_order_ref"] == case["order"]["external_order_ref"]:
+                raise ValueError(
+                    f"{case['id']}: prior_proofs points at this case's OWN order "
+                    f"{entry['submitted_for_order_ref']!r}. core reads that as an "
+                    f"idempotent re-submission and lets the claim straight through, "
+                    f"which silently un-does the scenario."
+                )
 
 
 def generate_manifest(*, allow_missing_images: bool = False) -> dict:
@@ -573,7 +640,18 @@ def generate_manifest(*, allow_missing_images: bool = False) -> dict:
                 "trust_level": "SIMULATOR",
             },
         ],
+        # D02 gets NO allocation, deliberately. Handing it one would produce
+        # DUPLICATE through TXN_ALREADY_ALLOCATED -- the right status for the
+        # wrong reason, a green test papering over the missing feature. The
+        # reuse here is in the bytes: D02.jpg IS G02.jpg, and the only record
+        # that the picture has been spent already is this one.
         "allocations": [],
+        "prior_proofs": [
+            {
+                "image_of_case": "G02",
+                "submitted_for_order_ref": "ORD-G02",
+            },
+        ],
         "order": {
             "external_order_ref": "ORD-D02",
             "expected_amount_paisa": 250000,
@@ -846,6 +924,8 @@ def generate_manifest(*, allow_missing_images: bool = False) -> dict:
     # the key is then left off entirely rather than set to null, because every
     # reader in the repo guards with `case.get("images", {})` and a null value
     # defeats that guard while an absent key does not.
+    _resolve_prior_proofs(cases)
+
     for case in cases:
         meta = _image_meta(case["id"], allow_missing=allow_missing_images)
         if meta is not None:

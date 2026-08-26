@@ -141,6 +141,10 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
     return request(path, init, false)
   }
   if (!res.ok) throw await failure(res)
+  // 204 means the server has nothing to say, and `res.json()` on an empty body
+  // throws a SyntaxError that reads like a broken endpoint. An action that
+  // succeeded must not surface as a parse error.
+  if (res.status === 204) return null
   return res.json()
 }
 
@@ -300,6 +304,33 @@ export async function submitClaim(file: File, orderId: string): Promise<Verifica
       headers: { 'Idempotency-Key': idempotencyKey() },
     }),
   )
+}
+
+/**
+ * The merchant approved this order. Spend the screenshot behind it.
+ *
+ * Checking a receipt and accepting it are two acts, and only the second one
+ * spends anything. The backend used to record the proof image the moment a check
+ * came back VERIFIED, which turned a mis-click in the order picker into a fraud
+ * accusation: pick the wrong order of two that cost the same, see "Payment
+ * received", back out, re-check against the right order — and the honest
+ * customer's receipt came back DUPLICATE, "ask the customer for a new payment".
+ * Nothing had been counted. This call is the merchant actually committing, and
+ * it is the only thing that makes a later submission of the same image a reuse.
+ *
+ * Best-effort and silent, like `resetDemo`: the approve action is a local
+ * decision the merchant has already made, and a backend that is down must not
+ * turn it into an error on screen. In mock mode there is no server to tell.
+ */
+export async function approveVerification(verificationId: string): Promise<void> {
+  if (USE_MOCKS) return
+  try {
+    await request(`/verifications/${encodeURIComponent(verificationId)}/approve`, {
+      method: 'POST',
+    })
+  } catch {
+    /* the merchant's decision stands either way; this is only the memory of it */
+  }
 }
 
 /**

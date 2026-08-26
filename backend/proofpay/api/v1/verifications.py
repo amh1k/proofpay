@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import replace
 from datetime import UTC
@@ -13,10 +12,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 
+from proofpay.adapters import proof_store
 from proofpay.api.errors import ERROR_RESPONSES
 from proofpay.api.verification_mapper import verification_result_from_decision
 from proofpay.config import get_settings
 from proofpay.core.decide import DecisionPolicy, decide
+from proofpay.core.reasons import Status
 from proofpay.demo.clock import PINNED_ANCHOR
 from proofpay.extraction.errors import ExtractionError
 from proofpay.extraction.service import ExtractionService
@@ -67,11 +68,27 @@ def _extraction_service() -> ExtractionService:
     return ExtractionService(api_key=settings.dashscope_api_key, mode=mode)
 
 
-def _extract_claim(content: bytes, *, verification_id: str, merchant_id: str):
-    """Extract a claim while keeping fixture lookup tied to the uploaded bytes."""
+def _extract_claim(
+    content: bytes,
+    *,
+    verification_id: str,
+    merchant_id: str,
+    proof_sha256: str | None = None,
+):
+    """Extract a claim while keeping fixture lookup tied to the uploaded bytes.
+
+    `proof_sha256` is stamped onto the claim so the engine can recognise these
+    exact bytes if they arrive again. It is a parameter rather than a hash taken
+    here because the caller has already computed it (the fixture lookup and the
+    idempotency fingerprint both need it), and three independent `sha256(content)`
+    calls in one request is three chances for them to stop agreeing. Defaulting
+    to None keeps the function usable by callers that genuinely have no history
+    to compare against — `scripts/generate_api_mocks.py` is one.
+    """
     settings = get_settings()
+    digest = proof_sha256 if proof_sha256 is not None else proof_store.content_sha256(content)
     if settings.effective_receipt_extractor() == "deterministic":
-        fixture_case_id = _fixture_case_ids().get(hashlib.sha256(content).hexdigest())
+        fixture_case_id = _fixture_case_ids().get(digest)
         if fixture_case_id is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -104,7 +121,11 @@ def _extract_claim(content: bytes, *, verification_id: str, merchant_id: str):
         extracted,
         claim_id=verification_id,
         merchant_id=merchant_id,
+        # `proof_id` names this submission; `proof_sha256` names the picture.
+        # Only the second can be recognised across two uploads, which is the
+        # whole of `PROOF_REUSED`.
         proof_id=verification_id,
+        proof_sha256=digest,
     )
 
 
@@ -146,6 +167,7 @@ async def _submit_verification(
     if len(content) > _MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Screenshot exceeds the 10 MB upload limit")
 
+    proof_sha256 = proof_store.content_sha256(content)
     fingerprint = request_fingerprint(order_id, content)
     existing = find_existing(principal.merchant_id, idempotency_key, fingerprint)
     if existing is not None:
@@ -156,6 +178,7 @@ async def _submit_verification(
         content,
         verification_id=verification_id,
         merchant_id=principal.merchant_id,
+        proof_sha256=proof_sha256,
     )
     evaluated_at = PINNED_ANCHOR.astimezone(UTC)
     decision = decide(
@@ -165,6 +188,11 @@ async def _submit_verification(
         demo_case.allocations,
         now=evaluated_at,
         policy=DecisionPolicy(),
+        # This merchant's own accepted proofs, and nobody else's. Reading the
+        # store here rather than inside the engine is the whole reason `core`
+        # can stay pure: it compares hashes it was handed and never asks where
+        # they came from.
+        prior_proofs=proof_store.prior_proofs(principal.merchant_id),
     )
     result = verification_result_from_decision(
         decision,
@@ -174,6 +202,28 @@ async def _submit_verification(
         verification_id=verification_id,
         created_at=evaluated_at,
     )
+    # A VERIFIED proof is held PENDING, not recorded. Both halves matter, and
+    # `adapters/proof_store.py` carries the full argument:
+    #
+    #   VERIFIED, because a refused submission consumed no money — and because
+    #   recording an override would let the demo's byte-identical G01/D01 pair
+    #   flip order_demo_1001 to DUPLICATE depending on the presenter's click
+    #   order.
+    #
+    #   PENDING, because checking a receipt is not accepting it. A merchant who
+    #   picks the wrong order in the picker, sees VERIFIED, backs out and
+    #   re-checks against the right one must not be told their honest customer
+    #   reused a screenshot. Nothing here has been counted or allocated yet;
+    #   `POST /verifications/{id}/approve` below is where it becomes spent.
+    if decision.status is Status.VERIFIED:
+        proof_store.record_pending(
+            principal.merchant_id,
+            verification_id=verification_id,
+            sha256=proof_sha256,
+            order_id=demo_case.order.order_id,
+            order_ref=demo_case.order.reference,
+            submitted_at=evaluated_at,
+        )
     store_response(principal.merchant_id, idempotency_key, fingerprint, result)
     return result
 
@@ -190,6 +240,31 @@ router.add_api_route(
         "The screenshot is extracted and evaluated by the versioned decision engine."
     ),
 )
+
+
+@router.post(
+    "/{verification_id}/approve",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Approve the order this verification was run for",
+)
+def approve_verification(verification_id: str, principal: SubmitPrincipal) -> None:
+    """The merchant released the goods. Spend the proof image behind this check.
+
+    This is the moment screenshot reuse becomes true of an image, and it is a
+    separate call because it is a separate act: `POST /verifications` answers a
+    question, and this one commits to the answer. The shell has always modelled
+    the two separately — every verdict screen offers an approve action next to a
+    dismiss action — but the proof store used to be written by the *question*,
+    which turned a mis-click in the order picker into an accusation of fraud
+    against an honest customer. See `adapters/proof_store.py`.
+
+    Deliberately quiet about what it did. `204` whether or not a pending proof
+    was found: an unknown id, a second approval, and an approval of a verdict
+    that never verified are all "there is nothing more to spend here", and none
+    of them is a failure the merchant could act on. Answering `404` would also
+    hand any caller a way to probe which verification ids exist.
+    """
+    proof_store.approve(verification_id)
 
 
 @router.get("", response_model=VerificationHistory, summary="List verification history")

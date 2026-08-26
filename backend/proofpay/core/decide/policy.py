@@ -46,7 +46,7 @@ __all__ = ["DecisionPolicy"]
 class DecisionPolicy:
     """Every tunable number the verification engine reads."""
 
-    policy_id: str = "proofpay-policy-1.0.0"
+    policy_id: str = "proofpay-policy-1.2.0"
 
     # -- retrieval (blocking, not deciding) --------------------------------
     #: Half-width of the candidate time window, in seconds. A full day either
@@ -122,10 +122,43 @@ class DecisionPolicy:
     #: above `tau_accept` a verification could slip past the ambiguity check.
     tau_ambiguous: float = 0.45
     #: How much an unreadable field costs. A field OCR could not read is not
-    #: evidence *against* a candidate, so it is largely excluded from the
-    #: aggregate — but it is not free either, or a claim carrying nothing but
-    #: a name would score 1.0 on that name alone. See `engine.aggregate_score`.
-    missing_evidence_penalty: float = 0.25
+    #: evidence *against* a candidate, so it is excluded from the aggregate's
+    #: numerator — but it is not free either, or a claim carrying nothing but a
+    #: name would score 1.0 on that name alone. It therefore keeps this
+    #: fraction of its weight in the denominator. See `engine.aggregate_score`.
+    #:
+    #: **Why 0.50 and not 0.25.** At 0.25 an *absent* field was cheaper than a
+    #: *weak* one, so cropping the sender's name off a receipt made it more
+    #: likely to verify than printing a common name — fixture N06 (name cropped
+    #: away) scored 0.8408 and VERIFIED while G09 (same rail, name read
+    #: correctly but common) scored 0.7647 and did not. On a fraud product that
+    #: is backwards. Removing evidence can no longer raise a claim's aggregate
+    #: for any level scoring at or above `1 - missing_evidence_penalty`, which
+    #: at 0.50 is every rung of every ladder except `NAME_COMMON_ONLY` (0.20)
+    #: and `TS_HOUR_ART` (0.25); `test_properties.KNOWN_ABSENCE_EXPOSURES`
+    #: names those two and fails the day a third appears.
+    #:
+    #: **Why not 1.0**, which would close the AGREE/WEAK hole outright: two
+    #: labelled scenarios in `tests/core/scenarios.yaml` —
+    #: `no-transaction-id-printed` and `amount-unreadable-on-receipt` — assert
+    #: that a receipt which simply never printed a field still verifies, and
+    #: both fall below `tau_accept` once the penalty passes 0.527. Closing the
+    #: last of that hole means deleting two written-down product decisions,
+    #: which is a product call and not a tuning one.
+    #:
+    #: **What this knob cannot fix at any setting, stated so nobody reads the
+    #: paragraph above as "solved".** A CONTRADICTED field scores 0, so the
+    #: bound `1 - penalty` would need a penalty of 1.0 — and 1.0 is exactly
+    #: "an unreadable field argues against the candidate", which
+    #: `test_an_unreadable_field_never_argues_against_a_candidate` forbids. No
+    #: value satisfies both properties. So blanking a contradicted field still
+    #: helps a claim, and helps it twice: the score rises AND the `R075` block
+    #: disappears with the field. Measured: the same claim with a contradicting
+    #: sender name answers NEEDS_REVIEW/`R075` at 0.8235, and with that name
+    #: blanked answers VERIFIED/`R090` at 0.9032. Pinned and walked through the
+    #: real engine by `test_properties.KNOWN_VERDICT_EXPOSURES`; closing it
+    #: needs a RULE, not a number.
+    missing_evidence_penalty: float = 0.50
 
     # -- field weights -----------------------------------------------------
     #
@@ -151,6 +184,48 @@ class DecisionPolicy:
     #: ...and it must also be this fraction of what actually arrived, so a
     #: fixed floor does not flag rounding noise on a six-figure transfer.
     inflation_material_pct: float = 0.01
+    #: An overpayment smaller than this is a customer rounding up or covering
+    #: delivery, not a mistake anyone will ask for back.
+    overpayment_material_minor: int = 20_000  # Rs. 200
+    #: ...and it must ALSO be this multiple of what the order asked for, so a
+    #: fixed floor does not send every large order to a human. Unlike
+    #: `inflation_material_pct` this is a ratio to the ORDER TOTAL, and it may
+    #: legitimately exceed 1.0: 1.0 means "at least as much again as the order
+    #: asked for", i.e. the customer paid double. It is therefore deliberately
+    #: NOT in the 0.0..1.0 validation loop below, only bounded at zero.
+    #:
+    #: **How much evidence is behind the specific number: only the two fixtures
+    #: it reconciles.** G05 (+33%) expects VERIFIED and N02 (+233%) expects
+    #: review, which pins the admissible band to `(0.3333, 2.3333]` and says
+    #: nothing about where inside it the line belongs. The prose here and in
+    #: `compare/amount.is_material_overpayment` motivates the rule with N02's
+    #: figure — three times the order total — while the constant cuts at
+    #: double, and `overpayment_material_minor` binds on neither fixture (G05's
+    #: overpayment is Rs 500) and only does any work on orders under Rs 200.
+    #: The fixture pair is evidence that a cut-point EXISTS; it is not evidence
+    #: for 1.0. Retune against real overpayments when there are any, and do not
+    #: read the two green fixtures as a validation of this value.
+    overpayment_material_pct: float = 1.0
+
+    # -- extraction quality ------------------------------------------------
+    #: Extraction confidence below which a field was not read well enough to
+    #: carry a verification on its own. `R067` routes an otherwise-acceptable
+    #: match to a human when any field the match *depends on* came back under
+    #: this bar — a number the reader itself is unsure of is not the same kind
+    #: of evidence as one it read cleanly, and the aggregate score cannot say so
+    #: because the score is about agreement, not about legibility.
+    #:
+    #: **What the extractor can actually emit, which bounds this knob.**
+    #: `extraction/service._normalise` maps confidence *bands*, not scores:
+    #: `high -> 1.0`, `low -> 0.5`, and `none` reports no key at all, which
+    #: `PaymentClaim.confidence_for` reads as the fully-confident default of
+    #: 1.0. The only value below 1.0 that exists today is therefore exactly
+    #: 0.5, so every setting in the half-open interval (0.5, 1.0] behaves
+    #: identically and every setting at or below 0.5 can never fire. 0.75 is
+    #: the midpoint of the live band: it keeps meaning something the day the
+    #: extractor learns to report a continuous score, and it does not pretend
+    #: to be tuned against a distribution that does not exist yet.
+    min_field_confidence: float = 0.75
 
     # -- tamper ------------------------------------------------------------
     #: Image observations tolerated before a weak field match becomes
@@ -174,6 +249,7 @@ class DecisionPolicy:
             "tau_margin",
             "tau_ambiguous",
             "missing_evidence_penalty",
+            "min_field_confidence",
             "name_strong_t",
             "name_initials_t",
             "name_pair_min_t",
@@ -212,6 +288,13 @@ class DecisionPolicy:
             raise ValueError("amount_tolerance_minor must be >= 0")
         if self.inflation_material_minor < 0:
             raise ValueError("inflation_material_minor must be >= 0")
+        if self.overpayment_material_minor < 0:
+            raise ValueError("overpayment_material_minor must be >= 0")
+        if self.overpayment_material_pct < 0.0:
+            # Bounded below only. A ratio to the order total above 1.0 is the
+            # useful part of this knob's range, so the unit-interval loop above
+            # would reject exactly the settings a merchant would want.
+            raise ValueError("overpayment_material_pct must be >= 0")
         if self.tamper_signal_limit < 0:
             raise ValueError("tamper_signal_limit must be >= 0")
 

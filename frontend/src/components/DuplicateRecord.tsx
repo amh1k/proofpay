@@ -1,9 +1,13 @@
 /**
  * DUPLICATE: the payment this receipt points at, and the fact that it is spent.
  *
- * There is nothing to oppose here — the claimed and received amounts are the
- * SAME, because the transaction is genuine. So this block deliberately does not
- * borrow the mismatch layout:
+ * There is nothing to oppose here. On a reused TRANSACTION the claimed and
+ * received amounts are the SAME, because the transaction is genuine; on a reused
+ * SCREENSHOT no transaction is named at all, because `R025` decides on the image
+ * bytes and never looks at the ranking (`Rule.reads_ranking`), so every figure
+ * below falls back to what the picture itself says. Either way there is one
+ * number, not two, and this block deliberately does not borrow the mismatch
+ * layout:
  *
  *   - no two figures and no "=" between them. One figure, once, because the
  *     money arrived once.
@@ -12,8 +16,17 @@
  *     agreements are stated in words down in the evidence instead.
  *
  * The one thing the merchant actually needs is WHICH earlier order already used
- * it. The API does not carry that yet, so `earlierOrderRef` returns null and the
- * row tells them how to find it rather than naming an order that may not exist.
+ * it, and whether they get it now depends on which duplicate this is. On
+ * screenshot reuse the engine knows and says so, so the row names the order. On
+ * an allocated transaction it still only knows the payment is spent, not what
+ * spent it, so `earlierOrderRef` returns null and the row tells them how to find
+ * it rather than naming an order that may not exist.
+ *
+ * The two also need different words, and this is the screen where the difference
+ * is most visible. "It has already paid for another order" is true of a reused
+ * TRANSACTION. On a reused SCREENSHOT the transaction may never have been
+ * claimed by anyone — what repeated is the picture — so the lede and the row
+ * label both switch. See the `PROOF_REUSED` branch in `lib/copy.ts`.
  */
 
 import type { ReactElement } from 'react'
@@ -66,12 +79,17 @@ export function DuplicateRecord({ p, result }: DuplicateRecordProps): ReactEleme
 
   const clock = formatClock(occurredAt)
   const sub = [providerName(provider), clock].filter(Boolean).join(', ')
+  const reused = result.reasons.includes('PROOF_REUSED')
+  // Only a verdict ABOUT the screenshot may fill this row from the note that
+  // names the screenshot's earlier order. See `earlierOrderRef`, which enforces
+  // it; the label below is gated on the same fact so the two can never say
+  // different things.
   const earlier = earlierOrderRef(result)
 
   return (
     <div className="mt-12 short:mt-8">
       <Figure
-        cap="This payment arrived once"
+        cap={reused ? 'The screenshot shows' : 'This payment arrived once'}
         value={formatMoney(amountMinor)}
         capColor={p.support}
         valueColor={p.ink}
@@ -79,7 +97,9 @@ export function DuplicateRecord({ p, result }: DuplicateRecordProps): ReactEleme
       />
 
       <p className="text-lede mt-6 mb-0 font-bold" style={{ color: p.ink }}>
-        It has already paid for another order.
+        {reused
+          ? 'This same screenshot was sent for another order.'
+          : 'It has already paid for another order.'}
       </p>
 
       <div className="mt-8" style={{ maxWidth: '52ch' }}>
@@ -89,7 +109,7 @@ export function DuplicateRecord({ p, result }: DuplicateRecordProps): ReactEleme
           <RecordRow label="Arrived" value={formatStamp(occurredAt) ?? ''} p={p} numeric />
         )}
         <RecordRow
-          label="Already used for"
+          label={reused ? 'Same screenshot as' : 'Already used for'}
           value={earlier ?? EARLIER_ORDER_UNKNOWN}
           p={p}
           numeric={earlier !== null}

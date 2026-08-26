@@ -102,9 +102,25 @@ export function onlyChangedSentence(items: readonly EvidenceItem[]): string | nu
  * block instead, where the merchant is already looking.
  */
 export function agreementMeaning(result: VerificationResult): string | null {
+  // Screenshot reuse is answered BEFORE the contradiction sentence, and the
+  // order is the fix rather than a preference. `R025` decides on the image
+  // bytes alone: it never consults the ranking, so the rows it carries are a
+  // comparison against whichever transaction happened to rank best for THIS
+  // order — which can disagree with the receipt on every field, because it is
+  // simply somebody else's payment. Measured live: a reused G01 checked against
+  // order 1002 came back with amount, reference and sender all CONTRADICT, and
+  // `onlyChangedSentence` printed "Only the amount, transaction ID and sender
+  // name were changed." under the duplicate header. That is the SUSPICIOUS
+  // family's forgery accusation, made against an honest customer, on the
+  // strength of a comparison nothing in the verdict rested on.
+  if (result.status === 'DUPLICATE' && result.reasons.includes('PROOF_REUSED')) {
+    return 'Every detail matches because it is the same screenshot as before — the details were never re-typed.'
+  }
   const only = onlyChangedSentence(result.evidence)
   if (only) return only
   if (result.status === 'DUPLICATE') {
+    // A reused TRANSACTION: every field agrees, and that agreement IS the
+    // finding — it is the same payment, not a second one.
     return 'Every detail matches, because it is the same payment as before — not a second one.'
   }
   return null
@@ -120,16 +136,61 @@ export function agreementMeaning(result: VerificationResult): string | null {
 const ORDER_REF = /\bORD(?:ER)?[-_ ]?\d[A-Z0-9-]*/g
 
 /**
- * DUPLICATE: which earlier order already spent this transaction.
+ * The one observation that states an earlier order outright instead of leaving
+ * it to be scraped. `core/proofs.py` emits `PROOF_PREVIOUSLY_SUBMITTED:<order>`
+ * on every screenshot-reuse finding, in the `CODE:detail` shape the extractor's
+ * notes already use.
  *
- * The API has no field for it yet — the engine knows the transaction is
- * allocated, not what it is allocated to — so this reads any order reference the
- * backend happens to put in `reasons`, `observations` or `summary`, ignoring the
- * order currently being checked. Null means we genuinely do not know, and the
- * screen tells the merchant how to find it instead of naming one.
+ * Reading it takes priority over `ORDER_REF` below, and not only for tidiness:
+ * the regex demands a digit straight after `ORD`, so it finds `ORD-1041` but
+ * misses an id like `order_demo_1001` — and misses it silently, leaving the
+ * screen saying "search your orders" while the answer was sitting in the
+ * payload. An id the engine handed us should never have to survive a regex.
+ */
+const PROOF_REUSE_NOTE = 'PROOF_PREVIOUSLY_SUBMITTED:'
+
+/**
+ * DUPLICATE: which earlier order already used this payment or this screenshot.
+ *
+ * There is still no dedicated field on the API, so this reads any order
+ * reference the backend puts in `reasons`, `observations` or `summary`,
+ * ignoring the order currently being checked. What that finds depends on which
+ * duplicate it is, and the two are kept strictly apart. On screenshot reuse the
+ * engine knows the answer and publishes it: `core/proofs.py` emits a
+ * `PROOF_PREVIOUSLY_SUBMITTED:<order>` observation naming the order by the
+ * merchant's own reference, and `explain()` names it in the summary, so this
+ * returns something the merchant can actually look up. On an allocated
+ * transaction the engine still only knows that the payment is spent, not what
+ * spent it — so the note, which is about the IMAGE, is not read there, and this
+ * returns null so the screen says how to find the order rather than naming the
+ * wrong one.
  */
 export function earlierOrderRef(result: VerificationResult): string | null {
   const current = result.order_id?.toUpperCase() ?? null
+
+  // The note is read only on a verdict that is ABOUT the screenshot, and the
+  // guard is load-bearing twice over.
+  //
+  // It names the order this IMAGE was accepted for, which is a different fact
+  // from the one an `R020` verdict is making — there, the payment was spent by
+  // whichever order holds the allocation, and that need not be the order the
+  // picture was accepted for. Without this guard the row reads "Already used
+  // for: A" under a claim about a transaction that order B actually spent, and
+  // the merchant is sent to the wrong order.
+  //
+  // It is also what makes the DUPLICATE screen order-independent. `engine.py`
+  // emits this note whenever proof history says so, not only when `R025` won,
+  // so the demo's byte-identical G01/D01 pair gave order 1003 the note if and
+  // only if 1001 had been checked (and approved) earlier in the same process —
+  // the same order rendering two different sentences in one session.
+  if (result.reasons.includes('PROOF_REUSED')) {
+    for (const note of result.observations) {
+      if (!note.startsWith(PROOF_REUSE_NOTE)) continue
+      const ref = note.slice(PROOF_REUSE_NOTE.length).trim()
+      if (ref && ref.toUpperCase() !== current) return ref
+    }
+  }
+
   const haystacks = [...result.reasons, ...result.observations, result.summary]
 
   for (const text of haystacks) {

@@ -44,6 +44,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G01.jpg",
         "sha256": "acdd1e5cf43da66df48d366e5351d0c94c73b7cd812ed5fa077507ccab48fe42",
@@ -84,6 +85,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G02.jpg",
         "sha256": "a16c75cecbf8a795bcbc38811a6ba0a5fd60c6f945ccd08ed9cb37e1018beaa9",
@@ -124,6 +126,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G03.jpg",
         "sha256": "506d0a90904c2fa872f9bae26b58607be6d2b7b573b44a96a7b2942262d77e38",
@@ -164,6 +167,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G04.jpg",
         "sha256": "aebb509a8a6550105ddb60b8c583065ef7399c06df46da084bcba0680929e8f5",
@@ -204,6 +208,7 @@
         "outcome": "VERIFIED",
         "reason_code": "AMOUNT_OVERPAID"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G05.jpg",
         "sha256": "ef7650d0f4e0765b15f82901bb60ff78797dc98195e9c654e8978edb66f31e36",
@@ -244,6 +249,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G06.jpg",
         "sha256": "13468b73f370e8e879011fa016b1565838cd1aa072902ad36805259b7a8299c6",
@@ -284,6 +290,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G07.jpg",
         "sha256": "bd0d8de0602acfe6aaa797d7f9bc6929501574e9807eb184f08a8e86ff315aea",
@@ -324,6 +331,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G08.jpg",
         "sha256": "720d43e1fbc1ddebe0a58149668e7f89bc106d6f265d03097e88cd255f64f86f",
@@ -364,6 +372,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G09.jpg",
         "sha256": "42aa6c81173600b8e4510b8cabb0362675eca073153531d31750ade5dfa3a400",
@@ -404,6 +413,7 @@
         "outcome": "VERIFIED",
         "reason_code": "STRONG_FIELD_AGREEMENT"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/G10.jpg",
         "sha256": "aca21c4063f8b8baf2842204cd6d4326a102e1b613e01a022b88dae3abc6458c",
@@ -433,6 +443,7 @@
         "outcome": "UNMATCHED",
         "reason_code": "NO_CANDIDATES"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/U01.jpg",
         "sha256": "ef26ff616fb7795e644b5d13aba2d615b08d53ce1aad9b75c0282e8be0000836",
@@ -473,6 +484,7 @@
         "outcome": "UNMATCHED",
         "reason_code": "NO_CANDIDATES"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/U02.jpg",
         "sha256": "15950f932365e6e03e45ee2b0b3b97ee5cca389c8567672c786d7c72c5a69088",
@@ -502,6 +514,7 @@
         "outcome": "UNMATCHED",
         "reason_code": "TIMESTAMP_MISMATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/U03.jpg",
         "sha256": "f5a1f34841b93480eddfa28e3ab6e380eaf4066b195ccad4cc2edc234775fd1b",
@@ -531,6 +544,7 @@
         "outcome": "UNMATCHED",
         "reason_code": "NAME_MISMATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/U04.jpg",
         "sha256": "5a7b0893e9e3408a7a6f9ca029ed90677e78d8f5c33176b4a671ee51a1488733",
@@ -572,6 +586,7 @@
         "outcome": "SUSPICIOUS",
         "reason_code": "CLAIM_INFLATED"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/S01.jpg",
         "sha256": "62e92ec60e8b5f990a6edbdc71631d70bdf7356d12b379f113c71e36c1e5ae91",
@@ -613,6 +628,7 @@
         "outcome": "SUSPICIOUS",
         "reason_code": "REFERENCE_MISMATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/S02.jpg",
         "sha256": "28a9fdf7d491cb34bb14a20c6fa1aeb8eb95f1ba519c14c2ca381aee8c817ea6",
@@ -654,6 +670,7 @@
         "outcome": "SUSPICIOUS",
         "reason_code": "FIELD_CONTRADICTS_MATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/S03.jpg",
         "sha256": "569be4cd6b767fa8affb477697b1e7fc3239a4c68d3edd730b2601993029fd37",
@@ -695,6 +712,7 @@
         "outcome": "SUSPICIOUS",
         "reason_code": "FIELD_CONTRADICTS_MATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/S04.jpg",
         "sha256": "5bded5daa447138f9ec783d340902450abbfc3982a86d8a5f347258363040be1",
@@ -736,6 +754,7 @@
         "outcome": "SUSPICIOUS",
         "reason_code": "FIELD_CONTRADICTS_MATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/S05.jpg",
         "sha256": "f6ab2c7f54071ab340958ed8c27e0ab50add2c2570c5f44ed83197cd6c8bb844",
@@ -777,6 +796,7 @@
         "outcome": "SUSPICIOUS",
         "reason_code": "FIELD_CONTRADICTS_MATCH"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/S06.jpg",
         "sha256": "e9567b12cdcd400a60933d6837fd0485d5d5b7223d568ce70c7fadf86d994439",
@@ -823,6 +843,7 @@
         "outcome": "DUPLICATE",
         "reason_code": "TXN_ALREADY_ALLOCATED"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/D01.jpg",
         "sha256": "acdd1e5cf43da66df48d366e5351d0c94c73b7cd812ed5fa077507ccab48fe42",
@@ -855,6 +876,13 @@
         }
       ],
       "allocations": [],
+      "prior_proofs": [
+        {
+          "image_of_case": "G02",
+          "submitted_for_order_ref": "ORD-G02",
+          "sha256": "a16c75cecbf8a795bcbc38811a6ba0a5fd60c6f945ccd08ed9cb37e1018beaa9"
+        }
+      ],
       "order": {
         "external_order_ref": "ORD-D02",
         "expected_amount_paisa": 250000
@@ -903,6 +931,7 @@
         "outcome": "DUPLICATE",
         "reason_code": "PROOF_REUSED"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/D03.jpg",
         "sha256": "d2be185ba2907fa1051f476b81fe96c1020ca1c587bed312682e355371e6f3c7",
@@ -949,6 +978,7 @@
         "outcome": "DUPLICATE",
         "reason_code": "TXN_ALREADY_ALLOCATED"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/D04.jpg",
         "sha256": "b180d035f9b5a4a73cb148172ffbe02596c7863396ce612acb41d59157cd9b99",
@@ -989,6 +1019,7 @@
         "outcome": "NEEDS_REVIEW",
         "reason_code": "AMOUNT_UNDERPAID"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/N01.jpg",
         "sha256": "3fa6e10f5bd7db34300c8922d7bf54eeafd133ba21899b10cc0a257f06d5bc23",
@@ -1029,6 +1060,7 @@
         "outcome": "NEEDS_REVIEW",
         "reason_code": "AMOUNT_OVERPAID"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/N02.jpg",
         "sha256": "6085e5f69cd408bde1d12613deed9b849e4c9bd10337615a749f814c43c376e8",
@@ -1079,6 +1111,7 @@
         "outcome": "NEEDS_REVIEW",
         "reason_code": "AMBIGUOUS_CANDIDATES"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/N03.jpg",
         "sha256": "636d957098adb62621c0fe5b78400a7908665bd8d0cc71d9c6191ccbf378c710",
@@ -1119,6 +1152,7 @@
         "outcome": "NEEDS_REVIEW",
         "reason_code": "LOW_EXTRACTION_CONFIDENCE"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/N04.jpg",
         "sha256": "e2f2129654cbcef22dbc0cda2c4751ef13cd80b41d7059edc0975aab7f767e10",
@@ -1159,6 +1193,7 @@
         "outcome": "NEEDS_REVIEW",
         "reason_code": "LOW_EXTRACTION_CONFIDENCE"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/N05.jpg",
         "sha256": "c924cc74434a9b4be651d414e19e35a5d9997383664c4423c9bbdeca29466571",
@@ -1199,6 +1234,7 @@
         "outcome": "NEEDS_REVIEW",
         "reason_code": "LOW_EXTRACTION_CONFIDENCE"
       },
+      "prior_proofs": [],
       "images": {
         "delivered": "images/N06.jpg",
         "sha256": "0b5afc69aed60dda657aa8acfd9ed2026bd0cc7577b97473e2d2c265a9da9d01",

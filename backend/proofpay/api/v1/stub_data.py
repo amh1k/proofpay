@@ -12,6 +12,11 @@ TWO KINDS OF DATA LIVE HERE, AND THEY HAVE DIFFERENT RULES:
      by the engine — it exists so the history and dashboard screens have
      something to show before any real check has been run.
 
+     One exception, and it is deliberate: the three PROVENANCE stamps on those
+     rows (`ruleset_version`, `policy_fingerprint`, `engine_version`) are
+     derived from the live engine rather than typed out.  See
+     `_STUB_POLICY_FINGERPRINT` below for what typing them out cost.
+
 WHY THERE ARE TWO CLOCKS IN THIS FILE:
     `_time()` below pins the illustrative rows to 2026-08-23.  The derived
     order rows carry engine_demo's timestamps instead, which are offsets from
@@ -28,6 +33,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from proofpay.api.engine_demo import DemoEngineCase, demo_cases
+from proofpay.core.decide import ENGINE_VERSION, RULESET_VERSION, DecisionPolicy
 from proofpay.core.reasons import ReasonCode
 
 from .auth import DEMO_VERIFIER
@@ -50,6 +56,21 @@ from .schemas import (
 
 def _time(hour: int, minute: int) -> datetime:
     return datetime(2026, 8, 23, hour, minute, tzinfo=UTC)
+
+
+# The one thing on an illustrative row that is NOT invented here.  The three
+# provenance stamps below say which rules, which thresholds and which pipeline
+# produced a verdict, and a merchant comparing a history row against a live
+# check reads them side by side.  Typed out by hand they were
+# "rules/2026-08-22.1" / "policy-demo-v1" / "engine-1.0.0" — a ruleset that
+# never existed, a fingerprint no `DecisionPolicy` can ever hash to, and an
+# engine version four releases stale.  Nothing failed when the real values
+# moved, because a literal cannot go stale loudly.
+#
+# Derived, they track.  `DecisionPolicy()` is the same default the endpoint in
+# `verifications.py` hands to `decide()`, so a history row and a fresh check
+# now agree on their provenance line instead of contradicting it on screen.
+_STUB_POLICY_FINGERPRINT = DecisionPolicy().fingerprint()
 
 
 DEMO_TRANSACTION = TransactionView(
@@ -240,9 +261,9 @@ DEMO_VERIFICATION = VerificationResult(
     fired_rule_id="R090",
     evidence=DEMO_EVIDENCE,
     recommended_action="Payment verified. Continue the order.",
-    ruleset_version="rules/2026-08-22.1",
-    policy_fingerprint="policy-demo-v1",
-    engine_version="engine-1.0.0",
+    ruleset_version=RULESET_VERSION,
+    policy_fingerprint=_STUB_POLICY_FINGERPRINT,
+    engine_version=ENGINE_VERSION,
     evaluated_at=_time(11, 43),
     created_at=_time(11, 43),
 )

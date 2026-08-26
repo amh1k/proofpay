@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import {
+  approveVerification,
   getDashboard,
   getVerification,
   listOrders,
@@ -225,7 +226,21 @@ export default function App(): ReactElement {
     [runCheck, selectedOrderId],
   )
 
+  /**
+   * The merchant approved. Two memories, and they are not the same memory.
+   *
+   * `usedTxnIds` is this session's: it greys out the approve button if the same
+   * payment comes back, and it is local because the demo's ledger is local.
+   *
+   * `approveVerification` is the backend's, and it is called for EVERY approval,
+   * including the ones with no transaction to spend. What it records is the
+   * screenshot, not the payment, and a screenshot is spent by the act of
+   * approving whether or not a transaction was named. Calling it after the
+   * `txnId` guard would have made screenshot reuse silently unreachable for any
+   * verdict that names no transaction.
+   */
   const onUse = useCallback((v: VerificationResult) => {
+    void approveVerification(v.id)
     const txnId = v.matched_txn_id
     if (!txnId) return
     setUsedTxnIds((prev) => new Set(prev).add(txnId))

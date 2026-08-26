@@ -146,6 +146,13 @@ def build(receipt: dict[str, str]) -> dict:
         case.allocations,
         now=EVALUATED_AT,
         policy=POLICY,
+        # Explicitly empty, and it matters. Mock generation is five INDEPENDENT
+        # decisions, not one merchant's session, so no proof accumulates from
+        # one receipt to the next. G01.jpg and D01.jpg are byte-identical, so a
+        # generator that carried a proof store between them would write a
+        # DUPLICATE mock for order_demo_1001 -- the frontend would then ship a
+        # verdict the live API never produces.
+        prior_proofs=(),
     )
     result = verification_result_from_decision(
         decision,
@@ -211,15 +218,47 @@ def check_every_order_is_answerable(results: list[dict]) -> None:
         )
 
 
+def verifications_payload(results: list[dict]) -> dict:
+    """`GET /verifications` as the list endpoint envelopes it."""
+    return {"items": results, "total": len(results)}
+
+
+def dashboard_payload(results: list[dict]) -> dict:
+    """The dashboard tiles, COUNTED from the five decisions rather than typed.
+
+    Six numbers is few enough to write out by hand, which is exactly why they
+    would drift: nothing goes red when a fixture's verdict moves and the tile
+    above it still reads what last year's verdict was.
+    """
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result["status"]] = counts.get(result["status"], 0) + 1
+
+    return {
+        "checked_today": len(results),
+        "verified": counts.get("VERIFIED", 0),
+        "unmatched": counts.get("UNMATCHED", 0),
+        "suspicious": counts.get("SUSPICIOUS", 0),
+        "duplicate": counts.get("DUPLICATE", 0),
+        "needs_review": counts.get("NEEDS_REVIEW", 0),
+    }
+
+
+def rendered(payload: dict) -> str:
+    """The exact text `write` puts on disk.
+
+    Split out from `write` so a test can rebuild a mock and compare it to the
+    committed bytes without reaching for a temporary directory — and so the
+    indent and the trailing newline have one definition rather than two.
+    """
+    return json.dumps(payload, indent=2) + "\n"
+
+
 def write(name: str, payload: dict) -> None:
     # The mocks live in the frontend tree, which is LF throughout. Without an
     # explicit newline, `write_text` on Windows rewrites every line of all three
     # files to CRLF and buries a real regeneration inside a whole-file diff.
-    (OUT / name).write_text(
-        json.dumps(payload, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    (OUT / name).write_text(rendered(payload), encoding="utf-8", newline="\n")
 
 
 def main() -> None:
@@ -227,24 +266,9 @@ def main() -> None:
     check_every_order_is_answerable(results)
 
     OUT.mkdir(parents=True, exist_ok=True)
-    write("verifications.json", {"items": results, "total": len(results)})
+    write("verifications.json", verifications_payload(results))
     write("orders.json", orders_payload())
-
-    counts: dict[str, int] = {}
-    for result in results:
-        counts[result["status"]] = counts.get(result["status"], 0) + 1
-
-    write(
-        "dashboard.json",
-        {
-            "checked_today": len(results),
-            "verified": counts.get("VERIFIED", 0),
-            "unmatched": counts.get("UNMATCHED", 0),
-            "suspicious": counts.get("SUSPICIOUS", 0),
-            "duplicate": counts.get("DUPLICATE", 0),
-            "needs_review": counts.get("NEEDS_REVIEW", 0),
-        },
-    )
+    write("dashboard.json", dashboard_payload(results))
 
     by_id = {order.id: order for order in STUB_ORDERS}
     for result in results:

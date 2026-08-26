@@ -49,7 +49,7 @@ import { VerdictActions, type ActionPair } from '../components/VerdictActions'
 import { providerName, verdictCopy } from '../lib/copy'
 import { evidenceRows } from '../lib/evidence'
 import { SIGN_CLASS, SIGN_MIN_HEIGHT } from '../lib/sign'
-import { presentation, type StatusPresentation } from '../lib/status'
+import { presentation, verdictWord, type StatusPresentation } from '../lib/status'
 import { agreementMeaning } from '../lib/verdict'
 import type { VerificationResult } from '../types'
 
@@ -110,12 +110,18 @@ function factBlock(result: VerificationResult, look: StatusPresentation): ReactE
  */
 function recordedFallback(result: VerificationResult): string {
   if (result.matched_transaction) return 'not in this transaction'
+  // Screenshot reuse is decided on the image bytes and names no transaction, on
+  // purpose (`Rule.reads_ranking`). "No payment found yet" would be a third
+  // wrong answer: payments were found, we simply did not put this verdict on
+  // any of them.
+  if (result.reasons.includes('PROOF_REUSED')) return 'no payment compared'
   if (result.status === 'NEEDS_REVIEW') return 'no payment chosen yet'
   return 'no payment found yet'
 }
 
 export function Verdict({ result, used, onUse, onDismiss }: VerdictProps): ReactElement {
   const look = presentation(result.status)
+  const word = verdictWord(result)
   const copy = verdictCopy(result)
   const where = providerName(result.matched_transaction?.provider ?? result.claim.provider)
   const meaning = agreementMeaning(result)
@@ -151,7 +157,7 @@ export function Verdict({ result, used, onUse, onDismiss }: VerdictProps): React
       <look.Glyph size={56} />
 
       <h1 className="text-verdict mt-6 mb-0 short:mt-4" style={{ maxWidth: '13ch' }}>
-        {look.word}
+        {word}
       </h1>
 
       <p className="text-lede mt-6 mb-0 short:mt-4" style={{ color: look.support, maxWidth: '32ch' }}>

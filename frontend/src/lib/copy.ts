@@ -184,6 +184,25 @@ export function verdictCopy(result: VerificationResult): VerdictCopy {
       }
 
     case 'DUPLICATE':
+      // Two different accusations wear this one status word, and rule 1 makes
+      // the distinction the product rather than a nicety. A reused TRANSACTION
+      // means the money arrived once and is being spent twice. A reused
+      // SCREENSHOT means the picture is a re-run — the payment behind it may be
+      // perfectly good, and the merchant's next move is to ask for a fresh
+      // receipt rather than to go hunting through an earlier order's money.
+      // Saying "this payment was already used" on a reused screenshot states
+      // something the engine did not find, and the customer can prove it wrong.
+      if (result.reasons.includes('PROOF_REUSED')) {
+        return {
+          lede:
+            'This is the same screenshot that was already used for an earlier order. The picture is a copy, not a second payment.',
+          advice,
+          reply:
+            'This receipt was already sent to me for an earlier order. Please send a fresh payment for this one.',
+          note: null,
+          actions,
+        }
+      }
       return {
         lede:
           'This payment was already used for an earlier order. The money arrived once, not twice.',

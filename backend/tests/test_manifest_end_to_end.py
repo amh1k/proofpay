@@ -40,11 +40,23 @@ THE LEDGER SCOPE, DECIDED HERE BECAUSE NOBODY HAD DECIDED IT ANYWHERE
     U01-U04 expect `NO_CANDIDATES`, which needs a feed with nothing in it to
     find, and D01-D04 deliberately reuse G01-G04's transaction references, which
     could not coexist in one real feed. Measured, for anyone tempted to switch:
-    per-case scoring reaches the manifest's status on 18 of 30 cases and its
-    status *and* reason on 10; a pooled 23-row feed reaches 20 and 15. The
+    per-case scoring reaches the manifest's status on 21 of 30 cases and its
+    status *and* reason on 12; a pooled 23-row feed reaches 23 and 17. The
     pooled figure is better only because a wider feed gives `build_name_idf`
     enough documents to stop flooring every name at `name_idf_floor`, and it
-    breaks U01 and U02 outright. That is a scoring artefact, not fixture intent.
+    breaks U01 and U02 outright -- both expect UNMATCHED and answer
+    NEEDS_REVIEW, U01 through `R050` and U02 through `R075`, because the pool
+    hands them candidates their own feed does not contain. That is a scoring
+    artefact, not fixture intent.
+
+    Re-measure both numbers whenever this file's answers move, and re-measure
+    them rather than adjusting them: the figures above were four counts stale
+    at one point, in the same paragraph that argues against switching, so a
+    reader re-opening the question would have been comparing today's pooled
+    result against a per-case baseline from three changesets ago. The two
+    lines that produce them are `_decide_case` over `CASES`, and the same loop
+    with a `{txn_id: txn}` union of every `_ledger_for(case)` in place of the
+    per-case feed.
 
 NOTHING HERE IS WEAKENED TO REACH GREEN
     A case the engine does not satisfy is either fixed in the fixture data or
@@ -56,6 +68,7 @@ NOTHING HERE IS WEAKENED TO REACH GREEN
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -68,7 +81,14 @@ from proofpay.core.decide.engine import build_context, decide
 from proofpay.core.decide.policy import DecisionPolicy
 from proofpay.core.decide.rules_v1 import RULES
 from proofpay.core.explain import explain
-from proofpay.core.models import Allocation, Decision, LedgerTxn, Order, PaymentClaim
+from proofpay.core.models import (
+    Allocation,
+    Decision,
+    LedgerTxn,
+    Order,
+    PaymentClaim,
+    ProofFingerprint,
+)
 from proofpay.core.money import Money
 from proofpay.core.reasons import Source
 from proofpay.demo.clock import PINNED_ANCHOR, PKT
@@ -137,8 +157,20 @@ def _claim_for(case: dict) -> PaymentClaim:
     They carry this case's own id, not the twin's.
     """
     case_id = case["id"]
-    claim = EXTRACTOR.extract((IMAGES / f"{case_id}.jpg").read_bytes(), f"e2e-{case_id}")
-    return replace(claim, merchant_id=MERCHANT_ID, proof_id=f"proof_{case_id}")
+    payload = (IMAGES / f"{case_id}.jpg").read_bytes()
+    claim = EXTRACTOR.extract(payload, f"e2e-{case_id}")
+    return replace(
+        claim,
+        merchant_id=MERCHANT_ID,
+        proof_id=f"proof_{case_id}",
+        # Hashing the bytes is the ADAPTER's job -- core is handed the digest
+        # and never computes one -- so this harness does here what
+        # `api/v1/verifications.py` does in the live path. Note the contrast
+        # this makes visible: `proof_id` is per-case, so D02's and G02's differ,
+        # while `proof_sha256` is per-image, so D02's and G02's are equal. That
+        # equality is the entire content of the PROOF_REUSED signal.
+        proof_sha256=hashlib.sha256(payload).hexdigest(),
+    )
 
 
 def _ledger_for(case: dict) -> tuple[LedgerTxn, ...]:
@@ -214,6 +246,30 @@ def _allocations_for(case: dict) -> tuple[Allocation, ...]:
     )
 
 
+def _prior_proofs_for(case: dict) -> tuple[ProofFingerprint, ...]:
+    """The earlier submissions of THIS case's image, as the engine sees them.
+
+    The image sibling of `_allocations_for`, and it filters the same way that
+    one does not have to: only ACCEPTED proofs may be passed, because a
+    submission that was itself refused consumed nothing and re-sending it is not
+    reuse. No fixture needs a refused prior proof yet, which is why the manifest
+    has no status key on this list -- when one does, it filters here.
+
+    `submitted_at` is left None rather than invented. The manifest records no
+    time for a prior proof, core orders a contested history by
+    `(submitted_at or _EPOCH, order_id, verification_id)` and so stays
+    deterministic without one, and manufacturing a plausible-looking timestamp
+    would put a number in the audit trail that nothing measured.
+    """
+    return tuple(
+        ProofFingerprint(
+            sha256=proof["sha256"],
+            order_id=proof["submitted_for_order_ref"],
+        )
+        for proof in case.get("prior_proofs", ())
+    )
+
+
 def _decide_case(case: dict) -> Decision:
     """Run one case exactly as this harness means it to be run.
 
@@ -232,6 +288,7 @@ def _decide_case(case: dict) -> Decision:
         _allocations_for(case),
         now=NOW,
         policy=POLICY,
+        prior_proofs=_prior_proofs_for(case),
     )
 
 
@@ -258,6 +315,7 @@ def _report(case: dict, decision: Decision) -> str:
         _allocations_for(case),
         now=NOW,
         policy=POLICY,
+        prior_proofs=_prior_proofs_for(case),
     )
     best = ctx.ranking.best
     txn = next((t for t in ledger if t.txn_id == decision.matched_txn_id), None)
@@ -309,8 +367,9 @@ def _report(case: dict, decision: Decision) -> str:
         "    - if the ENGINE is right, the fixture's expectation is wrong: change",
         "      it in tools/build_manifest.py and regenerate. Never hand-edit",
         "      manifest.json -- the next generator run reverts it silently.",
-        "    - if the FIXTURE is right, this is a core/ finding. core/ is frozen:",
-        "      report it on issue #3, do not edit the rule table.",
+        "    - if the FIXTURE is right, this is a core/ finding. Changing the",
+        "      rule table is a product decision, not a fixture repair: take it",
+        "      deliberately, in core/, with the reasoning written down there.",
         "    - if this disagreement is known and accepted, add a row to",
         "      KNOWN_DISAGREEMENTS with a `why` and a `resolves_when`.",
     ]
@@ -322,8 +381,18 @@ def _report(case: dict, decision: Decision) -> str:
 # ---------------------------------------------------------------------------
 
 #: The fixture names a reason code that no rule in `rules_v1.py` carries, so no
-#: arrangement of fixture data can reach it. Resolving one means a new rule in
-#: frozen `core/` -- a finding, never an edit made here.
+#: arrangement of fixture data can reach it. Resolving one means a new RULE, in
+#: `core/decide/rules_v1.py` -- never an edit made here.
+#:
+#: This used to say "a new rule in frozen `core/` -- a finding, never an edit",
+#: and the second half is still true while the first is not: `R025`, `R067` and
+#: `R072` were all added to that table, and the D02/N02/N06 rows that sat beside
+#: this constant were closed by adding them. A pin whose stated exit condition
+#: asks for somebody else's permission, when the neighbouring rows were closed
+#: without it, sends the next reader looking for an owner who is them.
+#: The guard is the mechanism, not the ownership: no rule carries the code
+#: today, and `test_unreachable_reason_codes_are_carried_by_no_rule` is what
+#: keeps that honest.
 KIND_ENGINE_CANNOT_EMIT_THIS_REASON: Final[str] = "engine cannot emit this reason"
 
 #: Right status, different reason, and the rule table says so on purpose.
@@ -336,10 +405,6 @@ KIND_FIXTURE_CANNOT_REACH_ITS_REASON: Final[str] = "fixture cannot reach its rea
 #: The receipt prints no time AND the sender's name scores as common, and the two
 #: together land the case just under `tau_accept`.
 KIND_WEAK_TIME_AND_WEAK_NAME: Final[str] = "weak timestamp and weak name"
-
-#: The engine and the fixture are each coherent and a human has not chosen
-#: between them.
-KIND_UNDECIDED_PRODUCT_QUESTION: Final[str] = "undecided product question"
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,18 +428,39 @@ class Disagreement:
 
 
 _NO_RULE_CARRIES_IT: Final[str] = (
-    "a rule carrying this reason code exists in core/decide/rules_v1.py. core/ is "
-    "frozen, so that is a decision for its owners, not a fixture edit."
+    "a rule carrying this reason code exists in core/decide/rules_v1.py. Adding "
+    "one is a product decision about what the merchant should be told, taken in "
+    "core/ with the reasoning written down there -- it is not a fixture edit, "
+    "and it is not blocked on anybody's permission either."
 )
 
 _LOW_CONFIDENCE_WHY: Final[str] = (
-    "LOW_EXTRACTION_CONFIDENCE is carried by no rule, and decide() never reads "
-    "claim.field_confidences at all -- so even a real Qwen-VL run reporting 0.3 "
-    "confidence would still return R999 with no reason codes. The offline stub "
-    "being a SHA-256 manifest lookup that cannot assess image quality is a second, "
-    "independent blocker: it leaves ExtractionResult.fields empty, so "
-    "service._normalise() always produces an empty field_confidences and the engine "
-    "reads full confidence. Neither blocker is a fixture bug."
+    "the ENGINE half of this is done and the EXTRACTOR half cannot be, which is "
+    "why these three rows changed kind rather than being deleted. R067 now "
+    "carries LOW_EXTRACTION_CONFIDENCE, decide() reads claim.field_confidences "
+    "through engine.CONFIDENCE_KEYS, and a claim carrying a low band really does "
+    "land in NEEDS_REVIEW naming that code -- asserted directly in "
+    "tests/core/test_engine.py and in three labelled rows of "
+    "tests/core/scenarios.yaml. What no arrangement of THIS manifest can do is "
+    "produce the confidence in the first place. The offline extractor is a "
+    "SHA-256 manifest lookup: it never inspects a pixel, so it leaves "
+    "ExtractionResult.fields empty, so service._normalise() builds an empty "
+    "field_confidences, so confidence_for() returns the fully-confident default "
+    "for every field. Only extraction/dashscope_ocr.py ever populates fields, and "
+    "only against the live Qwen-VL endpoint. The rule is out of reach here for "
+    "want of an input, not for want of a rule."
+)
+
+#: What ends the three rows above. Deliberately not "somebody implements the
+#: rule" any more -- that was true once and is now false, and a pin whose stated
+#: exit condition has already happened is worse than no pin at all.
+_LOW_CONFIDENCE_RESOLVES_WHEN: Final[str] = (
+    "the offline path can report per-field confidence bands: either the manifest "
+    "carries them per case and the stub passes them through, or these cases are "
+    "run against the cloud extractor. Until one of those exists there is no "
+    "confidence for R067 to read. Writing a band into manifest.json by hand is "
+    "specifically NOT the resolution -- the manifest records what the pipeline "
+    "found, and nothing in the pipeline found this."
 )
 
 KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
@@ -405,41 +491,47 @@ KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
         ),
         resolves_when=_NO_RULE_CARRIES_IT,
     ),
-    "D02": Disagreement(
-        kind=KIND_ENGINE_CANNOT_EMIT_THIS_REASON,
-        engine_status="VERIFIED",
-        engine_rule="R090",
-        engine_reasons=("AMOUNT_EXACT", "CLAIM_CONSISTENT", "STRONG_FIELD_AGREEMENT"),
-        why=(
-            "PROOF_REUSED is image provenance, not allocation: core/duplicates.py "
-            "says in as many words that it is computed from proof hashes and is not "
-            "implemented there. D02 deliberately gets NO allocation, because adding "
-            "one would produce DUPLICATE via TXN_ALREADY_ALLOCATED -- the right "
-            "status for the wrong reason, a green test papering over a missing "
-            "feature."
-        ),
-        resolves_when=(
-            "a proof-hash rule exists and the API passes proof hashes into the "
-            "decision. Until then this VERIFIED is the engine's honest answer."
-        ),
-    ),
+    # D02 had a row here and no longer needs one. `R025` carries PROOF_REUSED,
+    # the manifest gained a `prior_proofs` key, and D02 now reaches
+    # DUPLICATE / R025 / PROOF_REUSED from its own data -- naming ORD-G02, the
+    # order whose byte-identical image it re-sends. Its sibling D03 is a
+    # different problem entirely and keeps its row, below.
     "D03": Disagreement(
-        kind=KIND_ENGINE_CANNOT_EMIT_THIS_REASON,
+        kind=KIND_FIXTURE_CANNOT_REACH_ITS_REASON,
         engine_status="VERIFIED",
         engine_rule="R090",
         engine_reasons=("AMOUNT_EXACT", "CLAIM_CONSISTENT", "STRONG_FIELD_AGREEMENT"),
         why=(
-            "As D02, plus a second problem specific to this case: D03 claims to be a "
-            "cropped variant of G03's proof, but D03.jpg is an independent render "
-            "rather than a derivative of G03.jpg. A perceptual-hash rule would have "
-            "nothing to find here even once it exists."
+            "PROOF_REUSED is reachable now -- D02 reaches it -- but only from an "
+            "exact sha256 match, and D03 is the perceptual case. The old row here "
+            "claimed 'D03.jpg is an independent render, a perceptual-hash rule would "
+            "have nothing to find'. Half of that is measurably wrong and the "
+            "conclusion is right for a better reason, so both are recorded rather "
+            "than left as folklore. MEASURED over all 30 committed receipts, using "
+            "the same imagehash.phash(hash_size=16) that extraction/tamper.py "
+            "already computes on every upload: G03 <-> D03 is 14 bits of 256, so "
+            "there IS a signal. But 45 unrelated pairs sit strictly closer, and "
+            "S01 <-> S06 -- different senders, different amounts, different "
+            "reference ids, different sha256 -- have an IDENTICAL 256-bit pHash. No "
+            "cut-point separates reuse from coincidence here, not even 'identical "
+            "hash', so a perceptual rule would answer DUPLICATE on S06 before it "
+            "ever answered it on D03. That is not a fixture artefact: all 30 "
+            "receipts are one template with the numbers changed, which is exactly "
+            "what real receipts from one payment app are. See the measurement "
+            "written down in backend/proofpay/core/proofs.py."
         ),
         resolves_when=(
-            "a proof-hash rule exists AND D03's image is re-rendered as an actual crop of G03's."
+            "a near-duplicate signal exists that actually separates on this corpus "
+            "-- a crop-invariant hash over the receipt's text region, or a match on "
+            "the extracted field set rather than on pixels -- AND D03's image is "
+            "re-rendered as an actual crop of G03's so the fixture tests that "
+            "signal instead of an independent render. Raising a pHash threshold "
+            "until D03 goes green is specifically NOT the resolution; measure "
+            "S01 <-> S06 first."
         ),
     ),
     "N04": Disagreement(
-        kind=KIND_ENGINE_CANNOT_EMIT_THIS_REASON,
+        kind=KIND_FIXTURE_CANNOT_REACH_ITS_REASON,
         engine_status="NEEDS_REVIEW",
         engine_rule="R999",
         engine_reasons=("AMOUNT_EXACT", "CLAIM_CONSISTENT"),
@@ -448,10 +540,10 @@ KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
             "has no representation in the manifest at all, so nothing about this case "
             "differs from a clean one in any data the engine can see."
         ),
-        resolves_when=_NO_RULE_CARRIES_IT,
+        resolves_when=_LOW_CONFIDENCE_RESOLVES_WHEN,
     ),
     "N05": Disagreement(
-        kind=KIND_ENGINE_CANNOT_EMIT_THIS_REASON,
+        kind=KIND_FIXTURE_CANNOT_REACH_ITS_REASON,
         engine_status="NEEDS_REVIEW",
         engine_rule="R999",
         engine_reasons=("AMOUNT_EXACT", "CLAIM_CONSISTENT"),
@@ -461,24 +553,32 @@ KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
             "TS_MISSING 0.00 and the case does land in NEEDS_REVIEW. Only the reason "
             "is unreachable."
         ),
-        resolves_when=_NO_RULE_CARRIES_IT,
+        resolves_when=_LOW_CONFIDENCE_RESOLVES_WHEN,
     ),
     "N06": Disagreement(
-        kind=KIND_ENGINE_CANNOT_EMIT_THIS_REASON,
-        engine_status="VERIFIED",
-        engine_rule="R090",
-        engine_reasons=("AMOUNT_EXACT", "CLAIM_CONSISTENT", "STRONG_FIELD_AGREEMENT"),
+        kind=KIND_FIXTURE_CANNOT_REACH_ITS_REASON,
+        engine_status="NEEDS_REVIEW",
+        engine_rule="R999",
+        engine_reasons=("AMOUNT_EXACT", "CLAIM_CONSISTENT"),
         why=(
-            _LOW_CONFIDENCE_WHY + " N06 fails in the alarming direction, and the "
-            "mechanism deserves a human's attention on its own: its sender_name really "
-            "is null, which scores NAME_MISSING and is then EXCLUDED from the weighted "
-            "average as uncovered evidence rather than counted as disagreement. So "
-            "this cropped receipt scores 0.8407 and VERIFIES, while G09 -- same rail, "
-            "sender name present and read correctly -- scores 0.7647 on "
-            "NAME_COMMON_ONLY and does not. Cropping the sender off a receipt "
-            "currently helps it."
+            _LOW_CONFIDENCE_WHY + " N06 reaches the manifest's STATUS by a different "
+            "route, and the route is worth recording because it used to be a hole. Its "
+            "sender_name really is null, which scores NAME_MISSING and is EXCLUDED "
+            "from the weighted average as uncovered evidence rather than counted as "
+            "disagreement. At missing_evidence_penalty 0.25 that made absence cheaper "
+            "than weakness: this cropped receipt scored 0.8407 and VERIFIED, while G09 "
+            "-- same rail, sender name present and read correctly -- scored 0.7647 on "
+            "NAME_COMMON_ONLY and did not. Cropping the sender off a receipt helped "
+            "it. The penalty is now 0.50, N06 scores 0.8000, falls short of tau_accept "
+            "and lands in NEEDS_REVIEW, which is what the manifest asks for; only the "
+            "reason code is still out of reach. N06 does still out-score G09, because "
+            "removing the gap entirely needs a penalty of 0.7561 and two labelled "
+            "scenarios in tests/core/scenarios.yaml put the ceiling at 0.527. What is "
+            "left of the hole is named rung by rung in "
+            "tests/core/test_properties.py::KNOWN_ABSENCE_EXPOSURES, which fails if it "
+            "ever widens."
         ),
-        resolves_when=_NO_RULE_CARRIES_IT,
+        resolves_when=_LOW_CONFIDENCE_RESOLVES_WHEN,
     ),
     # -- right status, different reason, deliberately ------------------------
     **{
@@ -560,8 +660,11 @@ KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
             # G05 is an overpayment, so its amount evidence reads OVERPAID rather
             # than EXACT. Its reason code already matches the manifest; only the
             # status differs, and it differs for the reason above rather than
-            # because of the overpayment. See the N02 row, which is the case where
-            # the overpayment itself is the open question.
+            # because of the overpayment. The magnitude question that N02 used to
+            # be pinned for is settled -- R072 and overpayment_material_pct -- and
+            # it settles in G05's favour: +33% on a Rs 1,500 order is not a
+            # material overpayment, so the new rule leaves this case exactly where
+            # the date-only clock and the common-scoring name put it.
             ("G05", ("AMOUNT_OVERPAID", "CLAIM_CONSISTENT")),
             ("G06", ("AMOUNT_EXACT", "CLAIM_CONSISTENT")),
             ("G08", ("AMOUNT_EXACT", "CLAIM_CONSISTENT")),
@@ -569,30 +672,16 @@ KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
             ("G10", ("AMOUNT_EXACT", "CLAIM_CONSISTENT")),
         )
     },
-    # -- nobody has answered the question ------------------------------------
-    "N02": Disagreement(
-        kind=KIND_UNDECIDED_PRODUCT_QUESTION,
-        engine_status="VERIFIED",
-        engine_rule="R080",
-        engine_reasons=("AMOUNT_OVERPAID", "CLAIM_CONSISTENT", "STRONG_FIELD_AGREEMENT"),
-        why=(
-            "If a customer pays MORE than the order, do we ship or ask a human? Nobody "
-            "has decided, and the manifest answers it both ways in the same file. G05 "
-            "(Rs 2,000 against a Rs 1,500 order, +33%) expects VERIFIED / "
-            "AMOUNT_OVERPAID and agrees with R080. N02 (Rs 5,000 against Rs 1,500, "
-            "+233%) expects NEEDS_REVIEW / AMOUNT_OVERPAID and does not. Same rule, "
-            "same reason code, opposite verdicts, both authored in "
-            "tools/build_manifest.py. So this is not 'the engine is wrong' -- it is "
-            "'is there an overpayment magnitude threshold', which nobody has specified "
-            "and R080 does not implement. Neither expectation is edited here: "
-            "rewriting one to match the engine would be answering the question quietly "
-            "and burying it."
-        ),
-        resolves_when=(
-            "a human answers that question on issue #3. Whichever way it goes, one of "
-            "G05 or N02 changes, and this row goes with it."
-        ),
-    ),
+    # N02 used to sit here under a sixth kind, "undecided product question": the
+    # manifest answered "is a big overpayment VERIFIED or NEEDS_REVIEW?" both
+    # ways in one file -- G05 at +33% expecting VERIFIED, N02 at +233% expecting
+    # review -- and R080 verified both. The question has since been answered
+    # where a magnitude question belongs, as a threshold in DecisionPolicy:
+    # `overpayment_material_minor` and `overpayment_material_pct`, read by R072.
+    # N02 now reaches NEEDS_REVIEW / AMOUNT_OVERPAID on its own and needs no pin,
+    # and G05's row above records why the same threshold leaves it untouched.
+    # The kind went with the row: it had exactly one member, and a category
+    # nothing is filed under reads as a promise that something is still open.
 }
 
 

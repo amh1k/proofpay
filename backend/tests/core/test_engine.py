@@ -14,6 +14,7 @@ without a scenario fails the suite.
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, fields, replace
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
@@ -51,6 +52,7 @@ from proofpay.core.models import (
     LedgerTxn,
     Order,
     PaymentClaim,
+    ProofFingerprint,
     ScoredCandidate,
 )
 from proofpay.core.money import Money
@@ -126,6 +128,8 @@ def claim(
     sender: str | None = SENDER,
     when: ClaimedInstant | None = CLAIMED_AT,
     notes: tuple[str, ...] = (),
+    proof_sha256: str | None = None,
+    field_confidences: Mapping[str, float] | None = None,
 ) -> PaymentClaim:
     return PaymentClaim(
         claim_id=claim_id,
@@ -135,6 +139,11 @@ def claim(
         sender_name=sender,
         occurred_at=when,
         notes=notes,
+        proof_sha256=proof_sha256,
+        # What the READER said about its own reading, which is a different
+        # question from what the reading says. Absent by default, because that
+        # is what every extractor on the offline path reports.
+        field_confidences=dict(field_confidences or {}),
     )
 
 
@@ -149,6 +158,7 @@ def run(
     allocations: tuple[Allocation, ...] = (),
     *,
     observations: tuple[str, ...] = (),
+    prior_proofs: tuple[ProofFingerprint, ...] = (),
     policy: DecisionPolicy = POLICY,
 ) -> Decision:
     return decide(
@@ -159,6 +169,7 @@ def run(
         now=NOW,
         policy=policy,
         observations=observations,
+        prior_proofs=prior_proofs,
     )
 
 
@@ -198,6 +209,25 @@ def s_r020() -> Decision:
         order(),
         [txn()],
         [Allocation(txn_id="TX1001", order_id="O-OTHER")],
+    )
+
+
+def s_r025() -> Decision:
+    """A perfect match whose screenshot already paid a different order.
+
+    No allocation, deliberately: with one, `R020` would take this and the
+    scenario would prove nothing about `R025`. The only thing wrong here is
+    that these exact bytes have been seen before.
+    """
+    return run(
+        claim(proof_sha256="sha-of-a-receipt-already-spent"),
+        order(),
+        [txn()],
+        prior_proofs=(
+            ProofFingerprint(
+                sha256="sha-of-a-receipt-already-spent", order_id="O-OTHER"
+            ),
+        ),
     )
 
 
@@ -242,12 +272,48 @@ def s_r065() -> Decision:
     return run(claim(), order(), [txn(source=Source.MANUAL_ENTRY)])
 
 
+def s_r067() -> Decision:
+    """Every field agrees, and the reader says it was unsure of one of them.
+
+    The controlled pair to `s_r090`, which is this same perfect match with no
+    confidences reported at all. Only the reader's own opinion of its reading
+    differs, and that alone is enough to stop the order — which is the whole
+    claim `R067` makes.
+
+    Written here rather than driven from a fixture on purpose: the offline
+    extractor is a hash lookup and cannot produce a low confidence, so a fixture
+    test of this rule would have to fake one. Handing `decide()` the claim
+    directly tests the rule truthfully and leaves the extractor's limitation
+    where it belongs, which is on the extractor.
+    """
+    return run(
+        claim(field_confidences={"sender_name": 0.5}),
+        order(),
+        [txn()],
+    )
+
+
 def s_r070() -> Decision:
     """Rs. 1,950 against a Rs. 2,000 order, and the receipt agrees."""
     return run(
         claim(amount=Money(195_000)),
         order(RS_2000),
         [txn(amount=Money(195_000))],
+    )
+
+
+def s_r072() -> Decision:
+    """Rs. 8,000 against a Rs. 2,000 order: triple the total, and then some.
+
+    The controlled pair to `s_r080`, which overpays by Rs. 50 on the same
+    order. Only the magnitude differs, which is the whole point of `R072`:
+    `overpayment_material_pct` is a ratio to the order total, so Rs. 50 rides
+    along on a verification while Rs. 6,000 stops for a human.
+    """
+    return run(
+        claim(amount=Money(800_000)),
+        order(RS_2000),
+        [txn(amount=Money(800_000))],
     )
 
 
@@ -291,6 +357,7 @@ def s_r999() -> Decision:
 SCENARIOS: tuple[tuple[str, object, Status, Risk, ReasonCode | None], ...] = (
     ("R010", s_r010, Status.UNMATCHED, Risk.MEDIUM, ReasonCode.NO_CANDIDATES),
     ("R020", s_r020, Status.DUPLICATE, Risk.HIGH, ReasonCode.TXN_ALREADY_ALLOCATED),
+    ("R025", s_r025, Status.DUPLICATE, Risk.HIGH, ReasonCode.PROOF_REUSED),
     ("R030", s_r030, Status.SUSPICIOUS, Risk.HIGH, ReasonCode.CLAIM_INFLATED),
     ("R040", s_r040, Status.SUSPICIOUS, Risk.HIGH, ReasonCode.TAMPER_OBSERVATIONS),
     ("R050", s_r050, Status.NEEDS_REVIEW, Risk.MEDIUM, ReasonCode.AMBIGUOUS_CANDIDATES),
@@ -302,7 +369,21 @@ SCENARIOS: tuple[tuple[str, object, Status, Risk, ReasonCode | None], ...] = (
         Risk.MEDIUM,
         ReasonCode.SOURCE_PARTIALLY_TRUSTED,
     ),
+    (
+        "R067",
+        s_r067,
+        Status.NEEDS_REVIEW,
+        Risk.MEDIUM,
+        ReasonCode.LOW_EXTRACTION_CONFIDENCE,
+    ),
     ("R070", s_r070, Status.NEEDS_REVIEW, Risk.MEDIUM, ReasonCode.AMOUNT_UNDERPAID),
+    (
+        "R072",
+        s_r072,
+        Status.NEEDS_REVIEW,
+        Risk.MEDIUM,
+        ReasonCode.AMOUNT_OVERPAID_MATERIAL,
+    ),
     ("R080", s_r080, Status.VERIFIED, Risk.LOW, ReasonCode.AMOUNT_OVERPAID),
     (
         "R075",
@@ -392,6 +473,10 @@ def test_specific_amount_rules_precede_the_general_verification():
     order_of = {rule.id: i for i, rule in enumerate(RULES)}
     assert order_of["R070"] < order_of["R090"]
     assert order_of["R080"] < order_of["R090"]
+    # `R072` is the one specific rule that must outrank a *verifying* amount
+    # rule rather than the general one: it and `R080` both fire on an
+    # overpayment, and the magnitude qualifier is what decides between them.
+    assert order_of["R072"] < order_of["R080"]
 
 
 def test_a_hand_built_table_without_an_else_raises():
@@ -699,6 +784,144 @@ def test_duplicate_outranks_verification():
 
 
 # --------------------------------------------------------------------------
+# Extraction confidence
+#
+# `R067` cannot be reached through a fixture image. The offline extractor is a
+# SHA-256 manifest lookup: it never inspects a pixel, never fills
+# `ExtractionResult.fields`, and so `service._normalise` always hands the engine
+# an EMPTY `field_confidences`. Only the Qwen-VL path reports bands, and running
+# that in a test would mean a network call and a bill.
+#
+# So these tests hand `decide()` the claim directly. That is not a shortcut
+# around the seam -- it is the honest test of this rule, which is a statement
+# about what `decide()` does with a confidence it was given, not a statement
+# about which extractor can give it one. The extractor's limitation is asserted
+# in its own right in `tests/api/test_integration_seams.py`, where the empty
+# dict is pinned as a fact rather than left as an assumption.
+# --------------------------------------------------------------------------
+
+def test_a_doubted_field_stops_an_otherwise_perfect_match():
+    """The controlled pair. Same claim twice; only the reader's opinion moves."""
+    confident = run(claim(), order(), [txn()])
+    doubted = run(claim(field_confidences={"amount": 0.5}), order(), [txn()])
+
+    assert confident.status is Status.VERIFIED
+    assert confident.fired_rule_id == "R090"
+    assert doubted.status is Status.NEEDS_REVIEW
+    assert doubted.fired_rule_id == "R067"
+    assert ReasonCode.LOW_EXTRACTION_CONFIDENCE in doubted.reasons
+    # The evidence rows are untouched: the amount still agrees exactly. What
+    # changed is how sure we are that we read it, and the two are different
+    # facts that must not be folded into one number.
+    assert {e.level_code for e in doubted.evidence} == {
+        e.level_code for e in confident.evidence
+    }
+
+
+def test_an_extractor_that_reports_no_confidence_is_trusted():
+    """Silence is not doubt, and it must not be.
+
+    Every offline path reports nothing at all. Reading that as low confidence
+    would send every demo verification to a human and make the verdict depend on
+    which extractor happened to run rather than on what the customer sent.
+    """
+    ctx = build_context(claim(), order(), [txn()], [], now=NOW, policy=POLICY)
+    assert ctx.claim.field_confidences == {}
+    assert ctx.low_confidence_fields == ()
+    assert not ctx.has_low_confidence_field
+
+
+def test_only_a_field_the_match_rests_on_can_hold_it_up():
+    """A shaky reading of something nothing scored is not a reason to stop.
+
+    `currency`, `status` and `provider` come off the same receipt and are read
+    by the same model, but no comparison scores them, so they contributed
+    nothing to this verdict and cannot be grounds for doubting it. `R067` is a
+    statement about the evidence the decision RESTS on.
+    """
+    decision = run(
+        claim(field_confidences={"currency": 0.5, "status": 0.5, "provider": 0.5}),
+        order(),
+        [txn()],
+    )
+    assert decision.status is Status.VERIFIED
+    assert decision.fired_rule_id == "R090"
+
+
+def test_the_extractors_own_name_for_the_reference_field_is_recognised():
+    """`reference` here, `reference_id` there, and the map closes the gap.
+
+    The one scored field whose name core and the extractor never agreed on. A
+    rule that quietly missed it would look implemented and never fire on the
+    field most likely to be misread -- a long digit string in a small font.
+    """
+    ctx = build_context(
+        claim(field_confidences={"reference_id": 0.5}),
+        order(),
+        [txn()],
+        [],
+        now=NOW,
+        policy=POLICY,
+    )
+    assert ctx.low_confidence_fields == ("reference",)
+
+
+def test_a_doubted_field_is_named_not_merely_counted():
+    """The audit trail records WHICH field, in comparison order."""
+    ctx = build_context(
+        claim(field_confidences={"sender_name": 0.5, "amount": 0.5}),
+        order(),
+        [txn()],
+        [],
+        now=NOW,
+        policy=POLICY,
+    )
+    assert ctx.low_confidence_fields == ("amount", "sender_name")
+    assert [c.field for c in COMPARISONS].index("amount") < [
+        c.field for c in COMPARISONS
+    ].index("sender_name")
+
+
+def test_confidence_at_the_bar_is_confident_enough():
+    """`<`, not `<=`, matching every other cut-point in the policy."""
+    at_the_bar = run(
+        claim(field_confidences={"amount": POLICY.min_field_confidence}),
+        order(),
+        [txn()],
+    )
+    just_under = run(
+        claim(field_confidences={"amount": POLICY.min_field_confidence - 0.01}),
+        order(),
+        [txn()],
+    )
+    assert at_the_bar.fired_rule_id == "R090"
+    assert just_under.fired_rule_id == "R067"
+
+
+def test_a_doubted_field_never_rescues_a_claim_that_had_no_business_verifying():
+    """Below acceptance, the specific finding keeps the case.
+
+    `R067` is guarded on `>= tau_accept` exactly as `R065` is. Without that
+    guard a weak claim would be routed to review as "we could not read it"
+    instead of being reported UNMATCHED, which is a strictly worse answer: it
+    puts a person in front of a decision the engine had already made correctly.
+    """
+    decision = run(
+        claim(
+            amount=Money(777_000),
+            ref="ZZZ999",
+            sender=None,
+            when=None,
+            field_confidences={"amount": 0.5},
+        ),
+        order(),
+        [txn()],
+    )
+    assert decision.status is Status.UNMATCHED
+    assert decision.fired_rule_id == "R060"
+
+
+# --------------------------------------------------------------------------
 # Tamper observations
 # --------------------------------------------------------------------------
 
@@ -943,14 +1166,24 @@ def test_an_indistinguishable_ranking_names_nothing_whichever_rule_fires():
     Keying the suppression off the fired rule's reasons therefore leaked one of
     two interchangeable transactions into `matched_txn_id` - which the caller
     then allocates, whatever the status said.
+
+    Both rows carry the *same* provider reference, which a feed really does
+    produce when a provider re-posts a transaction under one id. That is what
+    keeps the pair interchangeable while still leaving the winner credible:
+    `dominant` needs *exactly one* exact reference match, so two of them is not
+    dominance. Written with no reference at all this claim scored 0.4379 - just
+    under `tau_reject` - so amounts were never compared, `R030` could not fire,
+    and the case fell to `R060`. That is the honest answer for a claim with no
+    credible candidate, but it is not the ordering this test exists to pin.
     """
     feed = [
-        txn("TX-500-A", amount=Money(50_000), sender=SENDER),
-        txn("TX-500-B", amount=Money(50_000), sender=SENDER),
+        txn("TX-500-A", amount=Money(50_000), sender=SENDER, ref="EP7791004"),
+        txn("TX-500-B", amount=Money(50_000), sender=SENDER, ref="EP7791004"),
     ]
-    inflated = claim(amount=Money(500_000), ref=None)
+    inflated = claim(amount=Money(500_000), ref="EP7791004")
     ctx = build_context(inflated, order(Money(500_000)), feed, [], now=NOW, policy=POLICY)
     assert ctx.indistinguishable is True
+    assert ctx.dominant is False
 
     decision = run(inflated, order(Money(500_000)), feed)
     assert decision.fired_rule_id == "R030"
@@ -1270,7 +1503,12 @@ def test_a_retuned_level_cut_point_moves_the_verdict_and_the_fingerprint_togethe
     """
     strict = DecisionPolicy(ts_sim_close_t=0.95)
     inputs = (
-        claim(ref=None, when=at_pkt(datetime(2026, 3, 4, 15, 52))),
+        # The unread field is the sender, not the transaction id. Both are
+        # weight-bearing, but the reference weighs a full 1.0 against the
+        # name's 0.6, and at `missing_evidence_penalty` 0.50 a receipt missing
+        # the reference lands in review on the penalty alone - which would make
+        # the cut-point this test is about invisible behind it.
+        claim(sender=None, when=at_pkt(datetime(2026, 3, 4, 15, 52))),
         order(),
         [txn()],
     )

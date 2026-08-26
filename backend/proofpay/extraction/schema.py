@@ -85,17 +85,48 @@ def compute_confidence_band(
     agreement: str,
     has_value: bool,
 ) -> Literal["high", "low", "none"]:
-    """Derive confidence_band from hard evidence — never from the model's opinion."""
+    """Did any hard check REFUTE this reading? Never the model's opinion of it.
+
+    Every input is three-state, and the middle state is the whole point:
+
+        True   the check ran and the reading passed it
+        False  the check ran and the reading FAILED it
+        None   the check never ran
+
+    The earlier form collapsed ``None`` into ``False`` -- it returned ``"low"``
+    for anything that was not affirmatively grounded -- and that is not a
+    nuance. ``dashscope_ocr`` passed ``grounded=None`` with the comment "Will
+    be set later by grounding check", and nothing ever set it, so **every field
+    the cloud reader successfully read came back "low"**. `service._normalise`
+    maps ``low -> 0.5``, `DecisionPolicy.min_field_confidence` is 0.75, and
+    `R067` routes any otherwise-acceptable match with a doubted field to a
+    human -- so the moment the engine started reading confidences, turning the
+    Qwen-VL extractor on meant no verification could ever return VERIFIED
+    again. A check that was never performed is not evidence of a problem, and
+    reporting it as one made a permanently-firing rule look like a tuned one.
+
+    So: a band of ``"low"`` is an ASSERTION that something is wrong, and only a
+    check that actually failed may make it. This matches the convention `core`
+    already runs on -- `PaymentClaim.confidence_for` answers 1.0 for a field no
+    extractor mentioned, because an extractor that reports nothing must not
+    thereby fail every verification. ``"high"`` correspondingly means "nothing
+    we checked refuted this", which is exactly as strong a claim as the checks
+    that ran, and no stronger.
+
+    ``"none"`` stays what it always was: there is no value here to have an
+    opinion about. `service._normalise` reports no confidence key at all for
+    it, which `confidence_for` reads as the fully-confident default -- absence
+    is handled by the MISSING rung on the comparison ladder, not by doubt.
+    """
     if not has_value:
         return "none"
-    if grounded is True and format_valid is True:
-        if agreement in ("agree", "single_source"):
-            return "high"
+    # Any one refutation is enough, and they are deliberately flat rather than
+    # nested: a value the OCR never saw, a value that will not parse, and a
+    # value two readers disagree about are three independent ways of being
+    # wrong, and none of them needs another check to have passed first.
+    if grounded is False or format_valid is False or agreement == "disagree":
         return "low"
-    if grounded is True and (format_valid is None or format_valid is False):
-        return "low"
-    # grounded is False or None
-    return "low"
+    return "high"
 
 
 class TamperObservation(BaseModel):

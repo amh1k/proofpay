@@ -38,7 +38,14 @@ import yaml
 from proofpay.core.decide.engine import decide
 from proofpay.core.decide.policy import DecisionPolicy
 from proofpay.core.decide.rules_v1 import RULES
-from proofpay.core.models import Allocation, Decision, LedgerTxn, Order, PaymentClaim
+from proofpay.core.models import (
+    Allocation,
+    Decision,
+    LedgerTxn,
+    Order,
+    PaymentClaim,
+    ProofFingerprint,
+)
 from proofpay.core.money import Money
 from proofpay.core.reasons import ObservationCode, ReasonCode, Source, Status
 from proofpay.core.timex import PKT, ClaimedInstant
@@ -112,6 +119,18 @@ def _claim(spec: Mapping[str, Any], *, name: str, merchant_id: str) -> PaymentCl
         reference_id=spec.get("reference_id"),
         occurred_at=_instant(spec.get("occurred_at")),
         notes=tuple(spec.get("notes", ())),
+        # The content hash of the proof image. A scenario writes any stable
+        # string it likes -- core compares it for equality and never interprets
+        # it -- so a row can say `proof_sha256: sha-of-the-first-receipt` and
+        # be read by a human. Absent means the caller never hashed the image,
+        # which is exactly the state in which no reuse finding may be produced.
+        proof_sha256=spec.get("proof_sha256"),
+        # What the READER said about its own reading. A scenario writes the
+        # extractor's own key names (`reference_id`, not `reference`) because
+        # that is what a real claim carries -- `engine.CONFIDENCE_KEYS` is what
+        # closes the gap, and a row that spelled the field core's way would
+        # exercise the map's identity arm and prove nothing.
+        field_confidences=dict(spec.get("field_confidences") or {}),
     )
 
 
@@ -135,6 +154,7 @@ class Scenario:
     order: Order | None
     ledger: tuple[LedgerTxn, ...]
     allocations: tuple[Allocation, ...]
+    prior_proofs: tuple[ProofFingerprint, ...]
     claim: PaymentClaim
     observations: tuple[str, ...]
 
@@ -158,6 +178,7 @@ class Scenario:
             now=self.now,
             policy=policy,
             observations=self.observations,
+            prior_proofs=self.prior_proofs,
         )
 
 
@@ -173,6 +194,10 @@ def _scenario(spec: Mapping[str, Any], *, merchant_id: str, now: datetime) -> Sc
         allocations=tuple(
             Allocation(txn_id=a["txn_id"], order_id=a["order_id"])
             for a in spec.get("allocations") or ()
+        ),
+        prior_proofs=tuple(
+            ProofFingerprint(sha256=p["sha256"], order_id=p.get("order_id"))
+            for p in spec.get("prior_proofs") or ()
         ),
         claim=_claim(spec["claim"], name=name, merchant_id=merchant_id),
         observations=tuple(str(ObservationCode(o)) for o in spec.get("observations") or ()),

@@ -116,7 +116,7 @@ THRESHOLD_DOC: Final[dict[str, str]] = {
     "tau_reject": "Below this no candidate is credible and the claim is `UNMATCHED`.",
     "tau_margin": "Minimum separation between best and runner-up before the two count as interchangeable.",
     "tau_ambiguous": "Plausibility floor above which indistinguishable candidates are reported `AMBIGUOUS_CANDIDATES`.",
-    "missing_evidence_penalty": "Weight an unreadable field keeps in the aggregate's denominator (0.25 = quarter-weight absence).",
+    "missing_evidence_penalty": "Weight an unreadable field keeps in the aggregate's denominator (0.50 = half-weight absence; below `1 - this` an absent field scores better than a weak one).",
     # -- field weights --
     "w_reference": "Weight of the reference-id comparison in the aggregate score.",
     "w_amount": "Weight of the amount comparison in the aggregate score.",
@@ -126,6 +126,10 @@ THRESHOLD_DOC: Final[dict[str, str]] = {
     "amount_tolerance_minor": "Permitted shortfall against the order total, in paisa.",
     "inflation_material_minor": "Absolute over-claim below which an inflated claim is OCR noise, in paisa.",
     "inflation_material_pct": "...and the fraction of what actually arrived that the over-claim must also exceed.",
+    "overpayment_material_minor": "Absolute overpayment below which more money than asked for is a customer rounding up, in paisa.",
+    "overpayment_material_pct": "...and the multiple of the ORDER TOTAL the overpayment must also reach before a human is asked (may exceed 1.0).",
+    # -- extraction quality --
+    "min_field_confidence": "Extraction confidence below which a scored field cannot carry a verification (`R067`). Unreachable offline: the stub extractor reports no confidences at all.",
     # -- tamper --
     "tamper_signal_limit": "Image observations tolerated before a weak field match becomes `SUSPICIOUS`.",
 }
@@ -145,6 +149,12 @@ _UNIT_GRID: Final[tuple[float, ...]] = tuple(round(v / 100, 2) for v in range(10
 #: where one field outvotes the other three combined, which is the whole
 #: interesting range.
 _WEIGHT_GRID: Final[tuple[float, ...]] = tuple(round(v / 10, 1) for v in range(31))
+
+#: A ratio to the order total, which is the one policy fraction that means
+#: something above 1.0 - `overpayment_material_pct` at 1.0 reads "the customer
+#: paid at least double". `_UNIT_GRID` cannot express that half of the range, so
+#: this grid runs past it rather than pretending the knob stops at 1.
+_RATIO_GRID: Final[tuple[float, ...]] = (0.0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0)
 
 #: Per-threshold sweep ranges for the quantities that are not fractions. Each is
 #: chosen to span from "obviously too tight to work" to "obviously too loose to
@@ -195,6 +205,14 @@ SWEEP_GRID: Final[dict[str, tuple[float, ...]]] = {
     "amount_tolerance_minor": (0, 1, 100, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000),
     "inflation_material_minor": (0, 100, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000),
     "inflation_material_pct": _UNIT_GRID,
+    # paisa: the same floors as the inflation knob, which the two share by design
+    "overpayment_material_minor": (0, 100, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000),
+    "overpayment_material_pct": _RATIO_GRID,
+    # Swept over the whole unit interval for completeness, and expected to move
+    # nothing: every case in this set runs through the offline extractor, which
+    # reports no field confidence at all, so `R067` cannot fire at any setting.
+    # A flip appearing in this row means the stub learned to report bands.
+    "min_field_confidence": _UNIT_GRID,
     "tamper_signal_limit": tuple(range(6)),
 }
 

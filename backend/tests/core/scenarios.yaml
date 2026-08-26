@@ -274,6 +274,68 @@ scenarios:
     expected_observations: [TIME_DATE_INFERRED]
 
   # ------------------------------------------------------------------
+  # Removing evidence must never help. The two rows below are the same
+  # receipt twice: same rail, same order, same date-only clock, same
+  # transaction id, same amount. The only difference is the sender line -
+  # cropped off in the first, printed and common in the second.
+  #
+  # This pair exists because the engine used to get it backwards. At
+  # `missing_evidence_penalty` 0.25 an absent field cost a quarter of its
+  # weight in the denominator and nothing in the numerator, so the cropped
+  # receipt scored 0.8407 and VERIFIED while the one that printed its sender
+  # scored 0.7647 and did not. Cropping the sender off a receipt made it more
+  # likely to pass - on a product whose whole claim is that it notices what a
+  # human cannot. Fixtures N06 and G09 in fixtures/demo/manifest.json are the
+  # same pair, found in the wild.
+  #
+  # Neither row asserts a score, because a score is a tuning detail and the
+  # verdict is what a merchant acts on. What is asserted is that they land in
+  # the same place: absence buys nothing that presence does not. The general
+  # statement of the same invariant, quantified over every rung of every
+  # ladder, is `test_properties.test_removing_evidence_can_never_raise_...`.
+  # ------------------------------------------------------------------
+
+  - name: date-only-receipt-with-the-sender-cropped-off
+    about: >
+      The transaction id and the amount agree exactly, the receipt shows
+      `20 Aug 2026` and no clock time, and the sender line is not in the
+      screenshot at all. Two of the four fields carry the decision, and that
+      is not quite enough to release goods on.
+    order: {order_id: "ORD-2214", expected: "1500.00"}
+    ledger:
+      - {txn_id: "TX1014", external_id: "EP41880273", amount: "1500.00",
+         occurred_at: "2026-08-20T12:40:00+05:00", sender_name: "Muhammad Ali"}
+    claim:
+      amount: "1500.00"
+      reference_id: "EP41880273"
+      occurred_at: {local: "2026-08-20T00:00:00", granularity_s: 86400, date_inferred: true}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R999
+    expected_reasons: [AMOUNT_EXACT, CLAIM_CONSISTENT]
+    expected_observations: [TIME_DATE_INFERRED]
+
+  - name: date-only-receipt-with-a-common-sender-name
+    about: >
+      The same receipt with its sender line intact, reading `Muhammad Ali` -
+      a name shared by a meaningful fraction of the country, so agreeing on it
+      is close to no evidence at all. Weak evidence, but evidence: this row
+      must not land anywhere better than the cropped one above, and it does
+      not.
+    order: {order_id: "ORD-2215", expected: "1500.00"}
+    ledger:
+      - {txn_id: "TX1015", external_id: "EP41880299", amount: "1500.00",
+         occurred_at: "2026-08-20T12:44:00+05:00", sender_name: "Muhammad Ali"}
+    claim:
+      amount: "1500.00"
+      reference_id: "EP41880299"
+      sender_name: "Muhammad Ali"
+      occurred_at: {local: "2026-08-20T00:00:00", granularity_s: 86400, date_inferred: true}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R999
+    expected_reasons: [AMOUNT_EXACT, CLAIM_CONSISTENT]
+    expected_observations: [TIME_DATE_INFERRED]
+
+  # ------------------------------------------------------------------
   # Time: clocks disagree, receipts round, and timezones are rendered wrong.
   # ------------------------------------------------------------------
 
@@ -390,6 +452,35 @@ scenarios:
     expected_status: VERIFIED
     expected_rule: R080
     expected_reasons: [AMOUNT_OVERPAID, STRONG_FIELD_AGREEMENT, CLAIM_CONSISTENT]
+
+  - name: overpaid-by-three-times-the-order
+    about: >
+      Rs 1,500 ordered, Rs 5,000 arrived, and the receipt honestly says
+      Rs 5,000. Nobody is lying and every field agrees, so this is not a fraud
+      finding - but nobody pays three times an order total on purpose either.
+      Somebody fat-fingered a digit or sent another order's money, and somebody
+      is going to ask for it back, so a human sees it before the goods go out.
+
+      The controlled pair to `overpaid-by-two-hundred` above: same rails, same
+      perfect field agreement, and the *only* difference is how much extra
+      arrived. That is what `overpayment_material_pct` is for - a ratio to the
+      order total, so Rs 200 on a Rs 2,000 order rides along on a verification
+      while Rs 3,500 on a Rs 1,500 order stops for a human. Rs 200 is exactly
+      `overpayment_material_minor`, so the row above clears the floor and is
+      held back by the ratio alone; that is deliberate, and it is what pins the
+      two knobs as a conjunction rather than as an either/or.
+    order: {order_id: "ORD-2234", expected: "1500.00"}
+    ledger:
+      - {txn_id: "TX1034", external_id: "EP20552104", amount: "5000.00",
+         occurred_at: "2026-08-20T13:47:00+05:00", sender_name: "Tanveer Abbas"}
+    claim:
+      amount: "5000.00"
+      reference_id: "EP20552104"
+      sender_name: "Tanveer Abbas"
+      occurred_at: {local: "2026-08-20T13:47:00", granularity_s: 60}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R072
+    expected_reasons: [AMOUNT_OVERPAID_MATERIAL, AMOUNT_OVERPAID, CLAIM_CONSISTENT]
 
   - name: claim-inflated-by-five-thousand
     about: >
@@ -804,6 +895,201 @@ scenarios:
     expected_status: DUPLICATE
     expected_rule: R020
     expected_reasons: [TXN_ALREADY_ALLOCATED]
+
+  # ------------------------------------------------------------------
+  # Screenshot reuse: the same PICTURE twice, which is a different finding
+  # from the same TRANSACTION twice. `R025`, and the exemption that keeps it
+  # from accusing an honest merchant of refreshing a page.
+  # ------------------------------------------------------------------
+
+  - name: same-screenshot-sent-to-a-second-order
+    about: >
+      The cheapest payment fraud there is: one real receipt, forwarded to a
+      second merchant or sent back to the same one under a new order. The
+      transaction is genuine and nothing on the receipt was edited, so every
+      field agrees and no amount rule has anything to say - which is precisely
+      why nothing but the bytes can catch it, and why a human never does.
+
+      The engine is TOLD the image was accepted before; it hashes nothing
+      itself. `prior_proofs` here is what an adapter read out of the merchant's
+      proof store, exactly as `allocations` is what it read out of theirs.
+    order: {order_id: "ORD-2280", expected: "4750.00"}
+    ledger:
+      - {txn_id: "TX1080", external_id: "EP80114427", amount: "4750.00",
+         occurred_at: "2026-08-20T13:12:00+05:00", sender_name: "Nadia Perveen Malik"}
+    prior_proofs:
+      - {sha256: "sha-of-the-forwarded-receipt", order_id: "ORD-2101"}
+    claim:
+      proof_sha256: "sha-of-the-forwarded-receipt"
+      amount: "4750.00"
+      reference_id: "EP80114427"
+      sender_name: "Nadia Perveen Malik"
+      occurred_at: {local: "2026-08-20T13:12:00", granularity_s: 60}
+    expected_status: DUPLICATE
+    expected_rule: R025
+    expected_reasons: [PROOF_REUSED]
+
+  - name: same-screenshot-sent-again-to-the-same-order
+    about: >
+      The exemption, and the single most important row in this block. Byte for
+      byte the same submission as the scenario above, differing only in WHICH
+      order the earlier proof was accepted for - here, this very order. That is
+      a retried upload, a double tap, a page refresh, and it must verify.
+
+      Without this line in `check_proof` the most ordinary thing a merchant does
+      becomes an accusation of fraud, and it is a failure a real user would find
+      long before a test did. `core/duplicates.py` draws the same line for
+      allocations for the same reason.
+    order: {order_id: "ORD-2281", expected: "4750.00"}
+    ledger:
+      - {txn_id: "TX1081", external_id: "EP81114428", amount: "4750.00",
+         occurred_at: "2026-08-20T13:12:00+05:00", sender_name: "Nadia Perveen Malik"}
+    prior_proofs:
+      - {sha256: "sha-of-the-resubmitted-receipt", order_id: "ORD-2281"}
+    claim:
+      proof_sha256: "sha-of-the-resubmitted-receipt"
+      amount: "4750.00"
+      reference_id: "EP81114428"
+      sender_name: "Nadia Perveen Malik"
+      occurred_at: {local: "2026-08-20T13:12:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: a-reused-screenshot-whose-transaction-is-also-spent
+    about: >
+      Both duplicate rules fire at once. `R020` must win: both answer DUPLICATE,
+      so the merchant's headline word is the same either way and only the
+      explanation differs - and "that payment already paid order ORD-2102" names
+      somewhere to look, while "we have seen this picture" does not.
+
+      This row exists to fail if R025 is ever moved above R020, which would
+      quietly downgrade every allocated-transaction duplicate to the vaguer
+      finding. Demo order 1003 and fixtures D01/D04 all depend on it.
+    order: {order_id: "ORD-2282", expected: "4750.00"}
+    ledger:
+      - {txn_id: "TX1082", external_id: "EP82114429", amount: "4750.00",
+         occurred_at: "2026-08-20T13:12:00+05:00", sender_name: "Nadia Perveen Malik"}
+    allocations:
+      - {txn_id: "TX1082", order_id: "ORD-2102"}
+    prior_proofs:
+      - {sha256: "sha-of-the-twice-spent-receipt", order_id: "ORD-2102"}
+    claim:
+      proof_sha256: "sha-of-the-twice-spent-receipt"
+      amount: "4750.00"
+      reference_id: "EP82114429"
+      sender_name: "Nadia Perveen Malik"
+      occurred_at: {local: "2026-08-20T13:12:00", granularity_s: 60}
+    expected_status: DUPLICATE
+    expected_rule: R020
+    expected_reasons: [TXN_ALREADY_ALLOCATED]
+
+  - name: an-unhashed-proof-cannot-be-a-duplicate-of-anything
+    about: >
+      The same reused receipt as the first row of this block, submitted through
+      an extraction path that never hashed the image - so the claim carries no
+      `proof_sha256`. The history is right there and still nothing fires.
+
+      Silence must not be evidence. A caller that cannot say what the bytes were
+      has told the engine nothing, and inventing a match out of that would make
+      the verdict depend on which extractor happened to run rather than on what
+      the customer did.
+    order: {order_id: "ORD-2283", expected: "4750.00"}
+    ledger:
+      - {txn_id: "TX1083", external_id: "EP83114430", amount: "4750.00",
+         occurred_at: "2026-08-20T13:12:00+05:00", sender_name: "Nadia Perveen Malik"}
+    prior_proofs:
+      - {sha256: "sha-of-the-forwarded-receipt", order_id: "ORD-2101"}
+    claim:
+      amount: "4750.00"
+      reference_id: "EP83114430"
+      sender_name: "Nadia Perveen Malik"
+      occurred_at: {local: "2026-08-20T13:12:00", granularity_s: 60}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  # ------------------------------------------------------------------
+  # How well the receipt was READ, which is not the same question as what it
+  # says. These rows are hand-written because they have to be: the offline
+  # extractor is a hash lookup and cannot report a low confidence, so no fixture
+  # image can reach R067. A labelled row is what this file is for; a doctored
+  # fixture would be a lie that went green.
+  # ------------------------------------------------------------------
+
+  - name: a-field-the-reader-could-not-make-out-goes-to-review
+    about: >
+      Every field agrees and the aggregate clears `tau_accept` comfortably -
+      and the reader has said it was not sure it read the amount. That is a
+      third state, and neither of the two the engine already had fits it: the
+      field is not MISSING (there is a number, and it matches) and it does not
+      CONTRADICT (nothing disagrees). Discounting it in the aggregate would
+      pretend it was absent; taking it at face value would release goods on a
+      figure our own reader flagged.
+
+      The confidence is keyed `amount`, which is what the extractor calls it.
+    order: {order_id: "ORD-2290", expected: "6200.00"}
+    ledger:
+      - {txn_id: "TX1090", external_id: "EP90114440", amount: "6200.00",
+         occurred_at: "2026-08-20T13:20:00+05:00", sender_name: "Sana Iftikhar Butt"}
+    claim:
+      amount: "6200.00"
+      reference_id: "EP90114440"
+      sender_name: "Sana Iftikhar Butt"
+      occurred_at: {local: "2026-08-20T13:20:00", granularity_s: 60}
+      field_confidences: {amount: 0.5}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R067
+    expected_reasons: [LOW_EXTRACTION_CONFIDENCE]
+
+  - name: a-shaky-reading-of-a-field-nobody-scored-changes-nothing
+    about: >
+      The controlled pair to the row above, and the one that stops R067 from
+      becoming a blanket "the photo was bad, ask a human". The same receipt,
+      the same perfect match, and the reader unsure of the CURRENCY and the
+      provider hint instead - two things it reads off the same picture and two
+      things no comparison scores. They contributed nothing to this verdict, so
+      they cannot be grounds for doubting it.
+
+      Without this line an unreadable "PKR" watermark would stop an order whose
+      transaction id, amount, time and sender all agree exactly.
+    order: {order_id: "ORD-2291", expected: "6200.00"}
+    ledger:
+      - {txn_id: "TX1091", external_id: "EP91114441", amount: "6200.00",
+         occurred_at: "2026-08-20T13:21:00+05:00", sender_name: "Sana Iftikhar Butt"}
+    claim:
+      amount: "6200.00"
+      reference_id: "EP91114441"
+      sender_name: "Sana Iftikhar Butt"
+      occurred_at: {local: "2026-08-20T13:21:00", granularity_s: 60}
+      field_confidences: {currency: 0.5, provider: 0.5, status: 0.5}
+    expected_status: VERIFIED
+    expected_rule: R090
+    expected_reasons: [STRONG_FIELD_AGREEMENT, AMOUNT_EXACT]
+
+  - name: a-doubted-reference-is-recognised-under-the-extractors-own-name
+    about: >
+      `core` calls the scored field `reference`; every extractor that reports a
+      confidence calls it `reference_id`. Nobody negotiated that, and a rule
+      that quietly missed the mismatch would look implemented while never
+      firing on the field most likely to be misread - a long digit string in a
+      small font, photographed at an angle.
+
+      This row is the seam, written down as a case rather than left to a
+      comment. `engine.CONFIDENCE_KEYS` is what makes it pass.
+    order: {order_id: "ORD-2292", expected: "6200.00"}
+    ledger:
+      - {txn_id: "TX1092", external_id: "EP92114442", amount: "6200.00",
+         occurred_at: "2026-08-20T13:22:00+05:00", sender_name: "Sana Iftikhar Butt"}
+    claim:
+      amount: "6200.00"
+      reference_id: "EP92114442"
+      sender_name: "Sana Iftikhar Butt"
+      occurred_at: {local: "2026-08-20T13:22:00", granularity_s: 60}
+      field_confidences: {reference_id: 0.5}
+    expected_status: NEEDS_REVIEW
+    expected_rule: R067
+    expected_reasons: [LOW_EXTRACTION_CONFIDENCE]
 
   # ------------------------------------------------------------------
   # Provenance: where the "ledger" row came from is part of the decision.

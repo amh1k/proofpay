@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from proofpay.core.explain import explain
+from proofpay.core.explain import ABSENT, explain
 from proofpay.core.models import Decision, LedgerTxn, Order, PaymentClaim
 
 from .v1.schemas import (
@@ -24,6 +24,32 @@ def _mask_reference(reference: str | None) -> str | None:
     if len(reference) <= 4:
         return "••••"
     return f"{reference[:2]}••••{reference[-2:]}"
+
+
+def _read_value(rendered: str | None) -> str | None:
+    """One side of an evidence row, with `explain`'s em dash turned back into null.
+
+    `core.explain` is a TEXT renderer: when a field could not be read it draws
+    `ABSENT` -- an em dash -- because a terminal column has to contain something.
+    That is a drawing, not a value, and forwarding it into JSON tells the client
+    that the field WAS read and says "—".
+
+    The client's own contract is explicit about the difference.
+    `frontend/src/types.ts` declares `claimed_value: string | null`, and
+    `src/lib/evidence.ts::displayValue` returns null only for null or blank —
+    so an em dash arrives as an ordinary string and is printed verbatim, in place
+    of the italic "not shown in this screenshot" the evidence list exists to show.
+    A merchant then reads a dash where they should read that we could not see the
+    field, which is a smaller claim than the truth and looks like a rendering bug.
+
+    Null rather than an empty string, for the reason `adapt.ts` gives from the
+    other side: "an empty string is nothing, not a value". Both sides of a row go
+    through here independently — a MISSING outcome routinely has a real value on
+    the ledger side and nothing on the receipt side.
+    """
+    if rendered is None or rendered == ABSENT:
+        return None
+    return rendered
 
 
 def _claim_view(claim: PaymentClaim) -> PaymentClaimView:
@@ -78,10 +104,14 @@ def verification_result_from_decision(
             score=outcome.score,
             agreement=outcome.agreement,
             claimed_value=(
-                rows_by_field[outcome.field].claimed if outcome.field in rows_by_field else None
+                _read_value(rows_by_field[outcome.field].claimed)
+                if outcome.field in rows_by_field
+                else None
             ),
             recorded_value=(
-                rows_by_field[outcome.field].actual if outcome.field in rows_by_field else None
+                _read_value(rows_by_field[outcome.field].actual)
+                if outcome.field in rows_by_field
+                else None
             ),
             detail=dict(outcome.detail),
         )
