@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
-from proofpay.db.models import MerchantMembership, MembershipStatus
+from proofpay.db.models import MembershipStatus, MerchantMembership
 
 from .base import one_or_none, scoped_select
 

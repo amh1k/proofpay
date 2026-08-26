@@ -15,7 +15,6 @@ from proofpay.db.repositories.base import as_uuid
 
 from ..verification_service import (
     VerificationRequest,
-    _extract_claim,
     _stored_result,
     submit_verification,
 )

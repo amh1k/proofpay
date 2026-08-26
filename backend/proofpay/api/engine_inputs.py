@@ -10,9 +10,11 @@ from proofpay.core.reasons import Source
 from proofpay.core.timex import ClaimedInstant
 from proofpay.db.models import (
     MerchantTransaction,
-    Order as OrderRecord,
     TransactionAllocation,
     TransactionSourceType,
+)
+from proofpay.db.models import (
+    Order as OrderRecord,
 )
 
 _SOURCE_BY_TYPE = {

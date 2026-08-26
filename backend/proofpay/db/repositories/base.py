@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from proofpay.db.base import Base
 
+
 def as_uuid(value: uuid.UUID | str) -> uuid.UUID | None:
     """Parse an external identifier without turning malformed IDs into 500s."""
     if isinstance(value, uuid.UUID):

@@ -32,21 +32,23 @@ from proofpay.api.verification_mapper import verification_result_from_decision
 from proofpay.config import get_settings
 from proofpay.core.compare.levels import Agreement, FieldOutcome
 from proofpay.core.decide import DecisionPolicy, decide
-from proofpay.core.models import Decision, PaymentClaim as EngineClaim
+from proofpay.core.models import Decision
+from proofpay.core.models import PaymentClaim as EngineClaim
 from proofpay.core.reasons import ReasonCode, Risk, Status
-from proofpay.demo.clock import PINNED_ANCHOR
 from proofpay.db.models import (
     AllocationStatus,
     EvidenceItem,
     EvidenceOutcome,
     IdempotencyRecord,
     IdempotencyState,
-    PaymentClaim as PaymentClaimRecord,
     PaymentProof,
     ProofRetentionStatus,
     TransactionAllocation,
     VerificationAttempt,
     VerificationLifecycleStatus,
+)
+from proofpay.db.models import (
+    PaymentClaim as PaymentClaimRecord,
 )
 from proofpay.db.repositories import (
     allocations,
@@ -57,6 +59,7 @@ from proofpay.db.repositories import (
     transactions,
 )
 from proofpay.db.repositories.base import as_uuid
+from proofpay.demo.clock import PINNED_ANCHOR
 from proofpay.extraction.errors import ExtractionError
 from proofpay.extraction.service import ExtractionService
 from proofpay.storage import (
