@@ -159,3 +159,13 @@ key degrades quality but never breaks the demo.
   working on exactly one laptop.
 - Receipt images are **synthetic**. Never commit a real payment screenshot; they contain real
   names, phone numbers and amounts.
+
+To recreate the complete persisted demo dataset from a clean checkout:
+
+```bash
+cd backend
+uv run python scripts/seed.py --reset
+```
+
+The command recreates the configured schema, loads all 30 manifest scenarios, and prints the
+deterministic merchant IDs to use when exercising the persisted API path.

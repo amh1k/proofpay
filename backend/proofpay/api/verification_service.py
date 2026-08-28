@@ -56,6 +56,7 @@ from proofpay.db.repositories import (
     idempotency,
     memberships,
     orders,
+    proof_fingerprints,
     proofs,
     transactions,
 )
@@ -136,9 +137,12 @@ def _extract_claim(
     `scripts/generate_api_mocks.py` is one.
     """
     settings = get_settings()
-    digest = proof_sha256 if proof_sha256 is not None else hashlib.sha256(content).hexdigest()
+    fixture_digest = hashlib.sha256(content).hexdigest()
+    digest = proof_sha256 if proof_sha256 is not None else fixture_digest
     if settings.effective_receipt_extractor() == "deterministic":
-        fixture_case_id = _fixture_case_ids().get(digest)
+        # Fixture lookup is against the original upload bytes. The persisted
+        # proof hash may instead identify the sanitized PNG stored privately.
+        fixture_case_id = _fixture_case_ids().get(fixture_digest)
         if fixture_case_id is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -567,21 +571,9 @@ def _submit_persisted(
             active_allocations = tuple(
                 allocation_to_engine(record) for record in allocation_records
             )
-            # NOTE: `prior_proofs` is deliberately not passed here yet, and that
-            # means R025 (PROOF_REUSED) cannot fire on the persisted path.
-            #
-            # It is NOT an oversight to fix by wiring in `adapters.proof_store`.
-            # That store is an in-memory stand-in for the demo path; this path
-            # already has the real thing — `payment_proofs` carries `sha256_hash`
-            # under a unique `(merchant_id, sha256_hash)` index, and
-            # `proofs.find_by_hash` is queried a few lines above to reuse the
-            # stored object. Reading the in-memory dict here would give one
-            # product two disagreeing memories of which pictures have been spent.
-            #
-            # The right move is a repository read that returns the merchant's
-            # accepted proofs as `ProofFingerprint`s, which needs the allocation
-            # join that says "accepted", not merely "uploaded". That belongs with
-            # whoever owns the persistence slice.
+            # Only proofs with an active allocation are accepted history. A
+            # merely uploaded proof has consumed nothing and must not trigger
+            # R025 on a later submission.
             decision = decide(
                 claim,
                 order,
@@ -589,6 +581,9 @@ def _submit_persisted(
                 active_allocations,
                 now=evaluated_at,
                 policy=DecisionPolicy(),
+                prior_proofs=proof_fingerprints.list_accepted_for_engine(
+                    session, merchant_id
+                ),
             )
 
             attempt_record.lifecycle_status = VerificationLifecycleStatus.DECIDED
@@ -603,6 +598,10 @@ def _submit_persisted(
                 decision.reasons[0].value if decision.reasons else None
             )
             attempt_record.decided_at = decision.evaluated_at
+
+            # Persist the attempt row before inserting children that refer to
+            # it through composite foreign keys.
+            session.flush()
 
             for outcome in decision.evidence:
                 session.add(
@@ -623,7 +622,12 @@ def _submit_persisted(
 
             if decision.status.value == "VERIFIED" and decision.matched_txn_id:
                 selected_transaction_id = as_uuid(decision.matched_txn_id)
-                if selected_transaction_id is not None:
+                already_allocated = any(
+                    allocation.merchant_transaction_id == selected_transaction_id
+                    and allocation.order_id == order_id
+                    for allocation in allocation_records
+                )
+                if selected_transaction_id is not None and not already_allocated:
                     session.add(
                         TransactionAllocation(
                             id=uuid4(),
@@ -635,6 +639,12 @@ def _submit_persisted(
                             allocated_at=evaluated_at,
                         )
                     )
+
+            # The allocation and attempt use composite foreign keys without
+            # ORM relationships. Flush them before the idempotency lookup can
+            # trigger an autoflush, so SQLite and PostgreSQL validate the
+            # complete graph in the intended order.
+            session.flush()
 
             result = verification_result_from_decision(
                 decision,
