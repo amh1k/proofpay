@@ -157,3 +157,65 @@ def test_seeded_http_verification_is_tenant_scoped(seeded_database) -> None:
             headers={"Idempotency-Key": "cross-tenant"},
         )
     assert response.status_code == 404
+
+
+#: One seeded case per verdict, and the receipt that reaches it.
+#:
+#: Track C's "done when" asks that `seed --reset` produce data which reproduces
+#: **all five** verification states on demand. The tests above prove the seed is
+#: repeatable and that fingerprints are allocation-scoped; neither drives a
+#: decision, so neither would notice if the seeded ledger stopped supporting a
+#: verdict. This is the test that would.
+FIVE_STATES = [
+    ("G01", "ORD-G01", "G01.jpg", "VERIFIED"),
+    ("S01", "ORD-S01", "S01.jpg", "SUSPICIOUS"),
+    ("D01", "ORD-D01", "D01.jpg", "DUPLICATE"),
+    ("N01", "ORD-N01", "N01.jpg", "NEEDS_REVIEW"),
+    ("U01", "ORD-U01", "U01.jpg", "UNMATCHED"),
+]
+
+
+@pytest.mark.parametrize(("case", "order_ref", "image_name", "expected"), FIVE_STATES)
+def test_seeded_data_reproduces_every_verification_state(
+    seeded_database, case: str, order_ref: str, image_name: str, expected: str
+) -> None:
+    """Upload the case's own receipt against its own seeded order, over HTTP.
+
+    Parametrised so a failure names the case rather than reporting "1 of 5".
+    Each case gets its own merchant, which is what lets the engine see the ledger
+    scope the manifest authored instead of a pooled feed that would change
+    retrieval and quietly move the verdict.
+    """
+    engine, _ = seeded_database
+    principal = DemoPrincipal(
+        user_id=str(seeded_id("user", case)),
+        merchant_id=str(seeded_id("merchant", case)),
+        display_name=f"Seeded {case} merchant",
+        role=MembershipRole.MERCHANT_ADMIN,
+        scopes=(),
+    )
+
+    def override_session():
+        with Session(engine) as session:
+            yield session
+
+    app = create_app()
+    app.dependency_overrides[get_current_principal] = lambda: principal
+    app.dependency_overrides[get_session] = override_session
+    image = FIXTURE_ROOT / "images" / image_name
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/verifications",
+            data={"order_id": str(seeded_id("order", f"{case}:{order_ref}"))},
+            files={"screenshot": (image.name, image.read_bytes(), "image/jpeg")},
+            headers={"Idempotency-Key": f"five-states-{case}"},
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == expected, (
+        f"{case} against its own seeded order returned {body['status']} "
+        f"via {body.get('fired_rule_id')}, expected {expected}. "
+        "Either the seeded ledger for this case changed or a rule moved; "
+        "check which before editing this expectation."
+    )
