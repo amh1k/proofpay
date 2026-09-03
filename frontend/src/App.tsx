@@ -138,6 +138,17 @@ export default function App(): ReactElement {
    */
   const cameFromHistoryRef = useRef(false)
 
+  /**
+   * How the check on screen was produced, so "Try again" can repeat it exactly.
+   *
+   * Only the unreadable screen offers that, and only because nothing was decided
+   * there: the cloud reader failed, extraction returned an empty claim, and the
+   * verdict underneath is about nothing. Re-running the SAME load is the whole
+   * point -- sending the merchant back to the upload screen to find the file
+   * again would be making them pay for our outage.
+   */
+  const lastLoadRef = useRef<(() => Promise<VerificationResult>) | null>(null)
+
   useEffect(() => {
     aliveRef.current = true
     return () => {
@@ -214,6 +225,7 @@ export default function App(): ReactElement {
   const runCheck = useCallback(async (load: () => Promise<VerificationResult>) => {
     const run = runRef.current + 1
     runRef.current = run
+    lastLoadRef.current = load
 
     setError(null)
     setResult(null)
@@ -367,6 +379,12 @@ export default function App(): ReactElement {
     [startOver, loadHistory],
   )
 
+  /** Run the last check again, unchanged. See `lastLoadRef`. */
+  const onRetry = useCallback(() => {
+    const load = lastLoadRef.current
+    if (load) void runCheck(load)
+  }, [runCheck])
+
   /** Replay a past check. Same path as a fresh one, hold included. */
   const onOpenFromHistory = useCallback(
     (verificationId: string) => {
@@ -431,6 +449,7 @@ export default function App(): ReactElement {
           result={result}
           used={result.matched_txn_id !== null && usedTxnIds.has(result.matched_txn_id)}
           onUse={onUse}
+          onRetry={onRetry}
           onDismiss={onDismiss}
         />
       )}

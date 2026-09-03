@@ -17,6 +17,7 @@
 import type { ReactElement } from 'react'
 import { Verdict } from './Verdict'
 import { VerdictUnmatched, VerdictVerified } from './VerdictPositive'
+import { VerdictUnreadable } from './VerdictUnreadable'
 import type { VerificationResult } from '../types'
 
 export interface ResultScreenProps {
@@ -29,6 +30,11 @@ export interface ResultScreenProps {
   used: boolean
   /** The merchant tapped "Use it". Spend the matched transaction. */
   onUse: (result: VerificationResult) => void
+  /**
+   * Run the same check again. Only reachable from the unreadable screen, where
+   * nothing was decided and the reader may simply be back.
+   */
+  onRetry: () => void
   /** Leave the verdict and go back to the upload screen. */
   onDismiss: () => void
 }
@@ -37,8 +43,20 @@ export function ResultScreen({
   result,
   used,
   onUse,
+  onRetry,
   onDismiss,
 }: ResultScreenProps): ReactElement {
+  // A degraded read is intercepted BEFORE the status switch, because in that
+  // state the status is not an answer. When the cloud reader fails, extraction
+  // returns an empty claim rather than raising, and an empty claim matches
+  // nothing, so the engine correctly answers UNMATCHED about nothing. Routed to
+  // a verdict, that reads "No matching payment yet" in the largest type on the
+  // page: reassuring, confident, and wrong, because the customer did pay and it
+  // was our reader that was down. See `VerdictUnreadable`.
+  if (result.degraded) {
+    return <VerdictUnreadable result={result} onRetry={onRetry} onDismiss={onDismiss} />
+  }
+
   switch (result.status) {
     case 'VERIFIED':
       return <VerdictVerified result={result} used={used} onUse={onUse} onDismiss={onDismiss} />

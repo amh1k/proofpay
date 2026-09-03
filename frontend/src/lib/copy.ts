@@ -72,6 +72,17 @@ export const HISTORY_EMPTY: Readonly<Record<'verified' | 'blocked' | 'review', s
 /** The row's own label for a figure the screenshot never carried. Rule 8. */
 export const HISTORY_NO_AMOUNT = 'amount not shown'
 
+/* ── when WE could not read it ──────────────────────────────────────────────
+ * Rule 4 turned on ourselves. A failed read is our problem, not the merchant's
+ * and certainly not the customer's, so none of these words suggest otherwise.
+ * "Could not read" and not "invalid receipt"; the receipt may be perfect. */
+export const UNREADABLE_TITLE = 'Could not read this one'
+export const UNREADABLE_LEDE =
+  'The problem is on our side, not with the payment. Nothing has been decided about it.'
+export const UNREADABLE_ADVICE =
+  'Try again in a moment. If it keeps happening, check the payment in your provider app and ' +
+  'approve the order yourself — do not keep the customer waiting on us.'
+
 /** The bottom nav strip. Counts come from `DashboardSummary`. */
 export const NAV_LABELS = {
   verified: 'Verified today',
