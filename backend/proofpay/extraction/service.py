@@ -67,13 +67,21 @@ def field_confidences_from(fields) -> dict[str, float]:
     return confidences
 
 
-def build_extractor(api_key: str | None = None, mode: str = "auto"):
+def build_extractor(
+    api_key: str | None = None,
+    mode: str = "auto",
+    model: str | None = None,
+):
     """Factory: build the right extractor based on configuration.
 
     Modes:
         "auto"    — DashScope if key present, else offline stub
         "offline" — Always offline stub (no network)
         "cloud"   — DashScope only (fails if no key)
+
+    `model` overrides the vision model and is only meaningful to the cloud
+    adapter. `None` leaves the adapter's own pinned default alone, which is the
+    one place the real default should live.
     """
     if mode == "offline":
         from proofpay.extraction.stub import OfflineStubExtractor
@@ -84,7 +92,9 @@ def build_extractor(api_key: str | None = None, mode: str = "auto"):
     if mode == "cloud" or (mode == "auto" and api_key):
         from proofpay.extraction.dashscope_ocr import DashScopeOcrExtractor
 
-        return DashScopeOcrExtractor(api_key=api_key)
+        if model is None:
+            return DashScopeOcrExtractor(api_key=api_key)
+        return DashScopeOcrExtractor(api_key=api_key, model=model)
 
     # Fallback: offline stub
     from proofpay.extraction.stub import OfflineStubExtractor
@@ -105,16 +115,18 @@ class ExtractionService:
         self,
         api_key: str | None = None,
         mode: str = "auto",
+        model: str | None = None,
     ):
         self.mode = mode
         self._extractor = None
         self._api_key = api_key
+        self._model = model
 
     @property
     def extractor(self):
         if self._extractor is None:
             self._extractor = build_extractor(
-                api_key=self._api_key, mode=self.mode
+                api_key=self._api_key, mode=self.mode, model=self._model
             )
         return self._extractor
 

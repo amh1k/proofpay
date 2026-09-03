@@ -107,7 +107,14 @@ def _fixture_case_ids() -> dict[str, str]:
 def _extraction_service() -> ExtractionService:
     settings = get_settings()
     mode = "cloud" if settings.effective_receipt_extractor() == "qwen" else "offline"
-    return ExtractionService(api_key=settings.dashscope_api_key, mode=mode)
+    return ExtractionService(
+        api_key=settings.dashscope_api_key,
+        mode=mode,
+        # None means "leave the adapter's pinned model alone". Passing it here is
+        # what makes `PROOFPAY_QWEN_MODEL` do anything at all; it previously
+        # stopped at the settings object.
+        model=settings.qwen_model,
+    )
 
 
 @lru_cache(maxsize=1)
