@@ -38,7 +38,16 @@ class Settings(BaseSettings):
 
     # Receipt understanding.
     receipt_extractor: Literal["qwen", "deterministic"] = "deterministic"
-    qwen_model: str = "qwen-vl-max"
+    #: Override the vision model. `None` means "whatever the adapter pins", which
+    #: is where the real default lives -- `DashScopeOcrExtractor.DEFAULT_MODEL`,
+    #: currently an OCR-specialised snapshot rather than a general VL model.
+    #:
+    #: This used to be `"qwen-vl-max"` and was never passed anywhere, so the
+    #: adapter's pinned model ran regardless and the setting did nothing. Two
+    #: model names in the tree, one of them dead, and the live one was not the
+    #: one you would have found by reading the config. Naming the default in one
+    #: place is what stops that recurring; `test_config.py` pins the wiring.
+    qwen_model: str | None = None
     dashscope_api_key: str | None = None
 
     # Upload limits (system_design.md 15.2).
