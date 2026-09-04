@@ -42,9 +42,16 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:5173>. Three buttons on the upload screen walk the three demo cases:
-an edited amount, a reused payment, and one that has not arrived yet. Add `?present=1` to raise
-the type size for a projector.
+Open <http://localhost:5173>. The quickest way in is the row of example buttons near the bottom,
+which walk three demo cases on their own: an edited amount, a reused payment, and one that has not
+arrived yet.
+
+To check a screenshot yourself, pick an order first. The picker is at the top of the screen, and
+"Check this payment" stays disabled until you use it, because the app will not check a payment
+against an order nobody chose. There are receipts to try in `fixtures/demo/images/`. `G01.jpg`
+against ORD-G01 verifies. `S01.jpg` against ORD-S01 is the edited amount.
+
+Add `?present=1` to raise the type size for a projector.
 
 **The backend** — engine and API:
 

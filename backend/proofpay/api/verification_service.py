@@ -37,14 +37,12 @@ from proofpay.core.models import Decision
 from proofpay.core.models import PaymentClaim as EngineClaim
 from proofpay.core.reasons import ReasonCode, Risk, Status
 from proofpay.db.models import (
-    AllocationStatus,
     EvidenceItem,
     EvidenceOutcome,
     IdempotencyRecord,
     IdempotencyState,
     PaymentProof,
     ProofRetentionStatus,
-    TransactionAllocation,
     VerificationAttempt,
     VerificationLifecycleStatus,
 )
@@ -627,25 +625,31 @@ def _submit_persisted(
                     )
                 )
 
-            if decision.status.value == "VERIFIED" and decision.matched_txn_id:
-                selected_transaction_id = as_uuid(decision.matched_txn_id)
-                already_allocated = any(
-                    allocation.merchant_transaction_id == selected_transaction_id
-                    and allocation.order_id == order_id
-                    for allocation in allocation_records
-                )
-                if selected_transaction_id is not None and not already_allocated:
-                    session.add(
-                        TransactionAllocation(
-                            id=uuid4(),
-                            merchant_id=merchant_id,
-                            merchant_transaction_id=selected_transaction_id,
-                            order_id=order_id,
-                            verification_attempt_id=attempt_id,
-                            status=AllocationStatus.ACTIVE,
-                            allocated_at=evaluated_at,
-                        )
-                    )
+            # NO ALLOCATION IS WRITTEN HERE, and that is the point.
+            #
+            # A VERIFIED decision used to allocate the transaction immediately,
+            # which meant that merely LOOKING at a receipt spent the money behind
+            # it. Reproduced end to end: a shop with two open orders of the same
+            # value -- the ordinary case for a single-product seller -- picks the
+            # wrong one in the order picker, sees VERIFIED, backs out without
+            # approving, and re-checks the same receipt against the right order.
+            # The second check answered DUPLICATE / R020 / TXN_ALREADY_ALLOCATED
+            # and told the merchant to refuse an honest customer, on the strength
+            # of their own mis-click. Nothing had been approved.
+            #
+            # `adapters/proof_store.py` already carries this rule for the demo
+            # path and states it plainly: a proof is spent when the decision was
+            # VERIFIED *and the merchant then approved*. Both, not either. This
+            # path had the first half only.
+            #
+            # So the allocation is created by `POST /verifications/{id}/approve`,
+            # which is where the merchant actually commits. The attempt row keeps
+            # everything that needs -- `selected_transaction_id`, `order_id` and
+            # `decision_status` are all persisted above.
+            #
+            # This also gates R025 for free: `proof_fingerprints` finds accepted
+            # proofs by joining ACTIVE allocations, so an unapproved check now
+            # leaves no proof history either. One rule, both duplicate signals.
 
             # The allocation and attempt use composite foreign keys without
             # ORM relationships. Flush them before the idempotency lookup can

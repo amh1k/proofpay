@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
@@ -11,7 +12,7 @@ from proofpay.adapters import proof_store
 from proofpay.api.deps import SessionDep
 from proofpay.api.errors import ERROR_RESPONSES
 from proofpay.db.models import PaymentClaim as PaymentClaimRecord
-from proofpay.db.repositories import memberships, orders, verifications
+from proofpay.db.repositories import allocations, memberships, orders, verifications
 from proofpay.db.repositories.base import as_uuid
 
 from ..verification_service import (
@@ -102,7 +103,11 @@ router.add_api_route(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Approve the order this verification was run for",
 )
-def approve_verification(verification_id: str, principal: SubmitPrincipal) -> None:
+def approve_verification(
+    verification_id: str,
+    principal: SubmitPrincipal,
+    session: SessionDep,
+) -> None:
     """The merchant released the goods. Spend the proof image behind this check.
 
     This is the moment screenshot reuse becomes true of an image, and it is a
@@ -118,8 +123,23 @@ def approve_verification(verification_id: str, principal: SubmitPrincipal) -> No
     that never verified are all "there is nothing more to spend here", and none
     of them is a failure the merchant could act on. Answering `404` would also
     hand any caller a way to probe which verification ids exist.
+
+    Both paths are spent here, and for one reason. The demo path holds a pending
+    proof in `adapters/proof_store.py`; the persisted path holds an attempt with
+    no allocation against it. Neither consumes anything until this call, because
+    checking a receipt asks a question and only approving commits to the answer.
     """
     proof_store.approve(verification_id)
+
+    merchant_id = as_uuid(principal.merchant_id)
+    attempt_id = as_uuid(verification_id)
+    if merchant_id is None or attempt_id is None:
+        return  # a demo-shaped id; the in-memory store above is the whole story
+
+    allocations.activate_for_attempt(
+        session, merchant_id, attempt_id, now=datetime.now(UTC)
+    )
+    session.commit()
 
 
 @router.get("", response_model=VerificationHistory, summary="List verification history")
