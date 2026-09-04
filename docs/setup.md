@@ -141,5 +141,6 @@ way anyone gets data, the demo is reproducible on any machine.
 - **Native builds.** `bcrypt` and `Pillow` ship prebuilt wheels for Python 3.12 on all three
   platforms, so no C compiler is needed. This is the practical reason we pin 3.12 rather than
   chasing the newest release.
-- **Database.** Development uses SQLite, which needs no server and no account. The same SQLAlchemy
-  models run against PostgreSQL in deployment; only `PROOFPAY_DATABASE_URL` changes.
+- **Database.** The hackathon demo uses SQLite, which needs no server and no account. The SQLAlchemy
+  models include PostgreSQL dialect variants and the optional driver is locked, but this repository
+  does not claim or configure a PostgreSQL deployment.
