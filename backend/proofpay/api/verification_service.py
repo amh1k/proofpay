@@ -149,10 +149,19 @@ def _extract_claim(
         # proof hash may instead identify the sanitized PNG stored privately.
         fixture_case_id = _fixture_case_ids().get(fixture_digest)
         if fixture_case_id is None:
+            # This message is read by a person, so it says what to do rather
+            # than which class refused. The old wording -- "the deterministic
+            # extractor only accepts committed synthetic demo fixtures" -- named
+            # an implementation detail the reader has no way to act on, and the
+            # likeliest reader is someone at a demo who has just dropped in their
+            # own screenshot to see what happens. That is a fair thing to try and
+            # it deserves a fair answer: the offline reader is a stand-in, the
+            # real one is a model, and the key is the difference.
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=(
-                    "The deterministic extractor only accepts committed synthetic demo fixtures"
+                    "This build reads the bundled sample receipts only. "
+                    "Set a Qwen-VL key to read any screenshot."
                 ),
             )
         extractor_claim_id = fixture_case_id

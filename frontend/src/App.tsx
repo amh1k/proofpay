@@ -435,7 +435,20 @@ export default function App(): ReactElement {
   const shownReference = shown === null ? null : orderRef(orders, shown.order_id)
 
   return (
-    <div className="flex min-h-full flex-col">
+    /* The shell is exactly the viewport, and only the middle of it scrolls.
+     *
+     * It used to be `min-h-full`, so the page grew to whatever the screen inside
+     * needed and the window scrolled. Measured at 1920 wide, the upload screen is
+     * 1135px tall (1316 in `?present=1`) whatever the viewport, so the nav strip
+     * was BELOW THE FOLD at every height tested including 1080. The three counts
+     * that are the product's memory were off-screen on the screen the merchant
+     * spends most of their time on, and reaching them meant scrolling the picker
+     * out of view.
+     *
+     * `h-full` plus `overflow-hidden` pins both strips. The screens sit in a
+     * scrollable middle, so a long upload screen scrolls WITHIN the app instead
+     * of pushing the chrome away. Verdicts are shorter and simply fit. */
+    <div className="flex h-full flex-col overflow-hidden">
       <TopStrip
         reference={shownReference}
         checkedAt={shown?.evaluated_at ?? null}
@@ -443,6 +456,21 @@ export default function App(): ReactElement {
         onReset={startOver}
       />
 
+      {/* `minHeight: 0` inline, not `min-h-0`: the spacing scale has no 0 step so
+        * that utility generates nothing, and without it a flex child refuses to
+        * shrink below its content and the overflow never engages. */}
+      <main
+        className="flex flex-1 flex-col overflow-y-auto"
+        style={{
+          minHeight: 0,
+          // Reserve the scrollbar's width whether or not one is needed. Without
+          // it the upload screen at 1920x950 overflows by NINE pixels, so the
+          // scrollbar appears, which narrows the content, which reflows the
+          // picker and the heading. The result is a visible flicker on the
+          // screen the merchant looks at most, over nine pixels.
+          scrollbarGutter: 'stable',
+        }}
+      >
       {screen === 'upload' && (
         <UploadScreen
           onSubmit={onSubmit}
@@ -472,6 +500,8 @@ export default function App(): ReactElement {
           onDismiss={onDismiss}
         />
       )}
+
+      </main>
 
       {/* The strip marks where the merchant is: the action cell on the upload
         * screen, the open list's cell on the list. A verdict marks neither —

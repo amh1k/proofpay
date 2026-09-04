@@ -529,7 +529,7 @@ export function UploadScreen({
        * rhythm is what pays for it — the alternative is shrinking type that has to
        * carry to the back of a room. Rule: `short:` may tighten spacing, never
        * type. */
-      className="flex flex-1 flex-col gap-8 px-6 py-12 short:gap-4 short:py-8 md:px-12 lg:px-16"
+      className="flex flex-1 flex-col gap-8 px-6 py-12 short:gap-4 short:py-6 md:px-12 lg:px-16"
       style={{ background: 'var(--color-ink)', color: 'var(--color-on-field)' }}
     >
       {/* First, because the answer to "is this payment real" depends on it. */}
