@@ -39,7 +39,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { CSSProperties, DragEvent, KeyboardEvent, ReactElement } from 'react'
+import type { DragEvent, KeyboardEvent, ReactElement } from 'react'
 import {
   ORDER_NONE,
   ORDER_PICKER_HINT,
@@ -104,22 +104,12 @@ const PASTE_HINT = 'or press Ctrl + V to paste'
 const NOT_AN_IMAGE = 'That is not an image. Share the screenshot itself.'
 
 /* ── the ink ground ─────────────────────────────────────────────────────────
- * Alphas of white, like the hairlines in `TopStrip`. No new hue enters here. */
-const DASH = 'rgba(255,255,255,.32)'
+ * The preview border stays neutral; provider-blue is reserved for interaction. */
 const DASH_LIVE = 'rgba(255,255,255,.72)'
-const WASH = 'rgba(255,255,255,.06)'
 
-/** The rule between the invitation and the argument beside it. */
-const HAIRLINE = 'rgba(255,255,255,.16)'
-
-/** Every button on this screen. Rule 5: one weight, no primary. */
-const BUTTON: CSSProperties = {
-  background: 'transparent',
-  border: '3px solid var(--color-on-field)',
-  color: 'var(--color-on-field)',
-}
-
-const BUTTON_CLASS = 'flex cursor-pointer items-center gap-3 px-8 py-4 text-lg font-bold'
+/** Every action on this screen. Rule 5: one weight, no primary. */
+const BUTTON_CLASS =
+  'pp-interactive pp-outline-control flex cursor-pointer items-center gap-3 px-8 py-4 text-lg font-bold'
 
 /**
  * The chosen order, and only the chosen order.
@@ -132,10 +122,9 @@ const BUTTON_CLASS = 'flex cursor-pointer items-center gap-3 px-8 py-4 text-lg f
  *
  * So the chosen order inverts: the same 3px rectangle, filled. Every other button
  * on this screen stays an outline, which makes exactly one filled sign on the
- * page and no possible confusion about what it means. No new hue enters — the
- * white that was the ink becomes the ground, and the label takes the ink token
- * for a white ground, nothing more, so it holds up in grayscale and on a
- * washed-out projector alike.
+ * page and no possible confusion about what it means. The provider-blue edge is
+ * the same active-control cue used elsewhere; the fill still holds up in
+ * grayscale and on a washed-out projector.
  *
  * `--color-on-paper`, not `--color-ink`. They are the same value today, and that
  * is exactly the trap: `--color-ink` is annotated in `theme.css` as the GROUND
@@ -145,12 +134,6 @@ const BUTTON_CLASS = 'flex cursor-pointer items-center gap-3 px-8 py-4 text-lg f
  * the two halves of one label from two token families is how a later edit to the
  * chrome ground silently drags one of them along.
  */
-const BUTTON_CHOSEN: CSSProperties = {
-  background: 'var(--color-on-field)',
-  border: '3px solid var(--color-on-field)',
-  color: 'var(--color-on-paper)',
-}
-
 /**
  * An order button: the reference, then the figure it is waiting for.
  *
@@ -165,7 +148,8 @@ const BUTTON_CHOSEN: CSSProperties = {
  * before changing it; do not reason about it.
  */
 const PICKER_CLASS =
-  'flex cursor-pointer flex-col items-start gap-1 px-8 py-4 text-lg font-bold' +
+  'pp-interactive pp-outline-control pp-order-control flex cursor-pointer flex-col' +
+  ' items-start gap-1 px-8 py-4 text-lg font-bold' +
   ' short:px-6 short:py-2'
 
 /**
@@ -313,7 +297,6 @@ function OrderPicker({ orders, selectedOrderId, onSelect }: OrderPickerProps): R
               onClick={() => onSelect(order.id, 'press')}
               onKeyDown={(e) => onKeyDown(e, index)}
               className={PICKER_CLASS}
-              style={chosen ? BUTTON_CHOSEN : BUTTON}
             >
               <span className="num">{order.external_order_ref}</span>
               {/* Rule 7: paisa through `formatMoney`, never a rupee string built
@@ -551,11 +534,8 @@ export function UploadScreen({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className="flex flex-1 cursor-pointer items-center gap-12 p-8 short:gap-8 short:p-6 md:p-12"
-        style={{
-          border: `3px dashed ${dragging ? DASH_LIVE : DASH}`,
-          background: dragging ? WASH : 'transparent',
-        }}
+        data-dragging={dragging}
+        className="pp-drop-layout pp-drop-target pp-interactive flex-1 cursor-pointer items-center gap-12 p-8 short:gap-8 short:p-6 md:p-12"
       >
         {/* `minWidth: 0` inline, not `min-w-0`: the spacing scale has no 0 step.
           * Without it the heading refuses to shrink and pushes the pair off. */}
@@ -582,12 +562,17 @@ export function UploadScreen({
           * fill -- the heading already uses the whole line, and stacking these
           * underneath would push the action button off a laptop screen. */}
         <div
-          className="ml-auto hidden shrink-0 flex-col gap-6 border-l-2 pl-8 short:gap-4 lg:flex"
-          style={{ borderColor: HAIRLINE, maxWidth: '34ch' }}
+          className="hidden shrink-0 flex-col gap-6 pl-8 short:gap-4 lg:flex"
+          style={{ borderLeft: '3px solid var(--color-source)', maxWidth: '34ch' }}
         >
-          {TRUST_PAIR.map((item) => (
+          {TRUST_PAIR.map((item, index) => (
             <div key={item.label}>
-              <b className="cap block" style={{ color: 'var(--color-on-field)' }}>
+              <b
+                className="cap block"
+                style={{
+                  color: index === 0 ? 'var(--color-source)' : 'var(--color-on-field)',
+                }}
+              >
                 {item.label}
               </b>
               <span className="block" style={{ color: 'var(--color-on-field-dim)' }}>
@@ -651,7 +636,6 @@ export function UploadScreen({
               aria-describedby={hintId}
               className={BUTTON_CLASS}
               style={{
-                ...BUTTON,
                 opacity: ready ? 1 : 0.6,
                 cursor: ready ? 'pointer' : 'not-allowed',
               }}
@@ -659,12 +643,12 @@ export function UploadScreen({
             >
               Check this payment
             </button>
-            <button type="button" className={BUTTON_CLASS} style={BUTTON} onClick={clear}>
+            <button type="button" className={BUTTON_CLASS} onClick={clear}>
               Choose another
             </button>
           </>
         ) : (
-          <button type="button" className={BUTTON_CLASS} style={BUTTON} onClick={pick}>
+          <button type="button" className={BUTTON_CLASS} onClick={pick}>
             Choose a screenshot
           </button>
         )}
@@ -706,7 +690,6 @@ export function UploadScreen({
                   key={demo.id}
                   type="button"
                   className={BUTTON_CLASS}
-                  style={BUTTON}
                   onClick={() => onSubmit({ kind: 'demo', verificationId: demo.id })}
                 >
                   <Glyph size={24} />

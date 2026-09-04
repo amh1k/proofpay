@@ -29,8 +29,6 @@ export interface TopStripProps {
 }
 
 const HAIRLINE = 'rgba(255,255,255,.16)'
-const CHROME_RULE = 'rgba(255,255,255,.32)'
-
 const RESET_LABEL = 'Start over'
 const RESET_HINT = 'Start over — clears this check and returns to the upload screen (Esc)'
 
@@ -57,7 +55,7 @@ export function TopStrip({
       }}
     >
       <b
-        className="shrink-0 font-extrabold"
+        className="shrink-0 text-base font-extrabold"
         style={{ color: 'var(--color-on-field)', letterSpacing: '0.1em' }}
       >
         ProofPay
@@ -77,12 +75,7 @@ export function TopStrip({
         onClick={onReset}
         title={RESET_HINT}
         aria-label={RESET_HINT}
-        className="cap shrink-0 cursor-pointer px-3 py-2"
-        style={{
-          background: 'transparent',
-          border: `2px solid ${CHROME_RULE}`,
-          color: 'var(--color-on-field)',
-        }}
+        className="pp-chrome-control pp-interactive cap shrink-0 cursor-pointer px-3 py-2"
       >
         {RESET_LABEL}
       </button>
