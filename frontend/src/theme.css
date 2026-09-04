@@ -14,6 +14,13 @@
    * mismatch/duplicate share a field on purpose: the silhouette separates them.
    */
   --color-ink: #101214;          /* ground for all chrome                      */
+  /* One step up from the chrome, for the screen BETWEEN the two strips. The app
+   * was a single flat sheet of #101214 with hairlines drawn on it, so the header
+   * and the nav strip read as part of the page rather than as the frame around
+   * it. 1.09:1 against the chrome is deliberately just enough to separate two
+   * surfaces without looking like two products; white on it measures 17.26:1 and
+   * the dim white 8.70:1, both computed rather than eyeballed. */
+  --color-ink-raised: #181b20;   /* the body between the strips                */
   --color-mismatch: #7a0f22;     /* white on it = 10.94:1                      */
   --color-duplicate: #7a0f22;    /* same field, different glyph                */
   --color-verified: #0b4f3f;     /* white on it                                */

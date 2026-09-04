@@ -28,6 +28,30 @@ export const UPLOAD_HINT = 'or paste it, or pick one of the examples below'
 export const UPLOAD_META =
   'Your provider SMS is already in ProofPay. The screenshot is only the claim.'
 
+/**
+ * The product's whole argument, as two labelled facts rather than one sentence.
+ *
+ * It was `UPLOAD_META` alone: one line of small caps at the very bottom of the
+ * screen, under the example buttons, where nobody reads it. That sentence IS the
+ * pitch -- the merchant's provider record is trusted because it came from the
+ * provider, and the customer's screenshot is a claim because anyone can edit a
+ * picture -- so it earns the empty half of the drop target instead.
+ *
+ * Two entries, not three, and no icons. The asymmetry is the point: one of these
+ * is evidence and the other is an assertion, and putting them side by side is
+ * the fastest way to say so.
+ */
+export const TRUST_PAIR: readonly { label: string; body: string }[] = [
+  {
+    label: 'Provider payment record',
+    body: 'Comes directly from the provider. This is what ProofPay checks against.',
+  },
+  {
+    label: "The customer's screenshot",
+    body: 'A picture, and pictures can be edited. This is the claim being checked.',
+  },
+]
+
 /* ── choosing the order ─────────────────────────────────────────────────────
  * A screenshot is never checked on its own — it is checked AGAINST an order, and
  * the merchant is the only one who knows which. These three lines are the whole
