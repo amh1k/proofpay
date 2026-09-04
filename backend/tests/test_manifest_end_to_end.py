@@ -580,31 +580,15 @@ KNOWN_DISAGREEMENTS: Final[dict[str, Disagreement]] = {
         ),
         resolves_when=_LOW_CONFIDENCE_RESOLVES_WHEN,
     ),
-    # -- right status, different reason, deliberately ------------------------
-    **{
-        cid: Disagreement(
-            kind=KIND_RULE_ORDER_BY_DESIGN,
-            engine_status="SUSPICIOUS",
-            engine_rule="R030",
-            engine_reasons=("AMOUNT_UNDERPAID", "CLAIM_INFLATED"),
-            why=(
-                "The fixture expects FIELD_CONTRADICTS_MATCH (R075); the engine "
-                "reaches SUSPICIOUS through R030 CLAIM_INFLATED instead. R030 sits "
-                "above R075 on purpose -- the rule table's own docstring names that "
-                "ordering -- because a receipt showing twice what was received is an "
-                "inflation claim first and a field contradiction second. The status "
-                "the merchant sees is the one the fixture wants; only the code "
-                "differs."
-            ),
-            resolves_when=(
-                "the fixture's expected reason_code is changed to CLAIM_INFLATED in "
-                "tools/build_manifest.py. That is a one-word fixture edit and the "
-                "likeliest of these rows to be closed, but it changes what the demo "
-                "claims these four cases prove, so it is not made here."
-            ),
-        )
-        for cid in ("S03", "S04", "S05", "S06")
-    },
+    # S03-S06 had a row here and no longer need one. They expected
+    # FIELD_CONTRADICTS_MATCH while the engine reached SUSPICIOUS through R030
+    # CLAIM_INFLATED, and the row proposed closing the gap by editing the
+    # fixture's expectation down to CLAIM_INFLATED. It closed the other way
+    # instead, and better: the contradiction is now DERIVED in
+    # `core/decide/engine.py::_reasons_for` rather than being R075's private
+    # property, so a claim that both over-states the amount and contradicts the
+    # transaction it matched now reports both. The status was never in dispute;
+    # the merchant simply gets the more serious of the two facts back.
     # -- the data cannot put the engine in that state ------------------------
     "U04": Disagreement(
         kind=KIND_FIXTURE_CANNOT_REACH_ITS_REASON,

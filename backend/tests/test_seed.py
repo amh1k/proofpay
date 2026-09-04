@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,10 +16,12 @@ from proofpay.api.v1.schemas import MembershipRole
 from proofpay.api.verification_service import _storage_service
 from proofpay.config import get_settings
 from proofpay.db.models import (
+    AllocationStatus,
     Merchant,
     MerchantMembership,
     MerchantTransaction,
     Order,
+    OrderStatus,
     PaymentProof,
     TransactionAllocation,
 )
@@ -27,6 +29,8 @@ from proofpay.db.repositories.proof_fingerprints import list_accepted_for_engine
 from proofpay.db.session import build_engine, get_session
 from proofpay.main import create_app
 from proofpay.storage import validate_image
+from scripts.seed import NOW as _SEED_NOW
+from scripts.seed import _at as _seed_at
 from scripts.seed import seed_database
 
 SEED_NAMESPACE = uuid5(NAMESPACE_URL, "https://proofpay.local/demo-seed/v1")
@@ -219,3 +223,113 @@ def test_seeded_data_reproduces_every_verification_state(
         "Either the seeded ledger for this case changed or a rule moved; "
         "check which before editing this expectation."
     )
+
+
+def test_checking_a_receipt_does_not_spend_it_until_the_merchant_approves(
+    seeded_database,
+) -> None:
+    """The order-picker mis-click must not accuse an honest customer.
+
+    A shop with two open orders of the same value is the ordinary case for a
+    single-product seller, and the whole premise of the order picker is that
+    picking is a decision the merchant can get wrong. So getting it wrong must
+    cost nothing.
+
+    This once did not hold on the persisted path. A VERIFIED decision wrote an
+    ACTIVE `TransactionAllocation` immediately, so merely LOOKING at a receipt
+    spent the payment behind it: pick the wrong order, see VERIFIED, back out
+    without approving, re-check against the right order, and the second check
+    answered DUPLICATE / R020 and told the merchant to refuse a customer who had
+    paid. The demo path already had the two-stage rule; this path had the first
+    half only.
+
+    Four assertions, in the order the merchant lives them, because a fix that
+    stops the accusation by never spending anything at all would pass the first
+    three.
+    """
+    engine, _ = seeded_database
+    merchant_id = seeded_id("merchant", "G01")
+    wrong_order = seeded_id("order", "G01:ORD-G01")
+
+    right_order = uuid4()
+    with Session(engine) as session:
+        session.add(
+            Order(
+                id=right_order,
+                merchant_id=merchant_id,
+                external_order_ref="ORD-SECOND",
+                expected_amount_minor=150_000,
+                currency="PKR",
+                status=OrderStatus.PENDING_PAYMENT,
+                created_at=_seed_at(-30),
+                updated_at=_SEED_NOW,
+            )
+        )
+        session.commit()
+
+    principal = DemoPrincipal(
+        user_id=str(seeded_id("user", "G01")),
+        merchant_id=str(merchant_id),
+        display_name="Seeded G01 merchant",
+        role=MembershipRole.MERCHANT_ADMIN,
+        scopes=(),
+    )
+
+    def override_session():
+        with Session(engine) as session:
+            yield session
+
+    def client() -> TestClient:
+        app = create_app()
+        app.dependency_overrides[get_current_principal] = lambda: principal
+        app.dependency_overrides[get_session] = override_session
+        return TestClient(app)
+
+    image = FIXTURE_ROOT / "images" / "G01.jpg"
+
+    def submit(order_id, key: str):
+        with client() as api:
+            return api.post(
+                "/api/v1/verifications",
+                data={"order_id": str(order_id)},
+                files={"screenshot": (image.name, image.read_bytes(), "image/jpeg")},
+                headers={"Idempotency-Key": key},
+            )
+
+    def active_allocations() -> int:
+        with Session(engine) as session:
+            return session.scalar(
+                select(func.count())
+                .select_from(TransactionAllocation)
+                .where(
+                    TransactionAllocation.merchant_id == merchant_id,
+                    TransactionAllocation.status == AllocationStatus.ACTIVE,
+                )
+            )
+
+    # 1. The mis-click. Verified, but a question consumes nothing.
+    first = submit(wrong_order, "mis-clicked")
+    assert first.status_code == 201
+    assert first.json()["status"] == "VERIFIED"
+    assert active_allocations() == 0, "checking a receipt must not allocate anything"
+
+    # 2. The correction. The customer is not accused of anything.
+    second = submit(right_order, "corrected")
+    assert second.status_code == 201
+    body = second.json()
+    assert body["status"] == "VERIFIED", (
+        f"re-checking after a mis-click returned {body['status']} / "
+        f"{body.get('fired_rule_id')}. The merchant's own mis-click has become an "
+        "accusation against a customer who paid."
+    )
+
+    # 3. Approving is what spends it.
+    with client() as api:
+        approved = api.post(f"/api/v1/verifications/{body['id']}/approve")
+    assert approved.status_code == 204
+    assert active_allocations() == 1
+
+    # 4. And once spent it is genuinely spent, or this "fix" is duplicate
+    #    detection switched off.
+    third = submit(wrong_order, "after-approval")
+    assert third.json()["status"] == "DUPLICATE"

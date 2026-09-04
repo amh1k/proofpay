@@ -198,6 +198,7 @@
       },
       "matched_txn_id": "EP0000303",
       "reasons": [
+        "FIELD_CONTRADICTS_MATCH",
         "CLAIM_INFLATED",
         "AMOUNT_UNDERPAID"
       ],

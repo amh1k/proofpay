@@ -26,6 +26,7 @@ from a blurry photo.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
 
@@ -194,7 +195,7 @@ def is_material_inflation(
         return False
     # Fraction of the money that actually arrived. ledger is present in every
     # call; order.expected is not, so it is the only base always available.
-    return inflation_minor >= policy.inflation_material_pct * ledger_minor
+    return inflation_minor >= _scaled(policy.inflation_material_pct, ledger_minor)
 
 
 def is_material_overpayment(
@@ -227,7 +228,35 @@ def is_material_overpayment(
         return False
     if overpayment_minor < policy.overpayment_material_minor:
         return False
-    return overpayment_minor >= policy.overpayment_material_pct * expected_minor
+
+    # `Fraction`, not `pct * expected_minor`. The threshold is a float and the
+    # amounts are exact paisa, so the obvious spelling converts money to a float
+    # at the one point where the answer turns on a single minor unit. Above
+    # 2**53 paisa that conversion rounds: at expected=9_007_199_254_740_993 an
+    # overpayment one paisa SHORT of the cut-point compares equal to it, and a
+    # non-material overpayment is reported as material. Nothing in the schema
+    # rejects those amounts -- the column is a BigInteger -- so the only thing
+    # standing between this and a wrong verdict was the size of Pakistani
+    # receipts. Money never becomes a float, including here.
+    return overpayment_minor >= _scaled(policy.overpayment_material_pct, expected_minor)
+
+
+def _scaled(pct: float, base_minor: int) -> Decimal:
+    """`pct` of `base_minor` paisa, without money ever becoming a float.
+
+    The obvious spelling, `pct * base_minor`, converts an exact paisa count to a
+    float at the one point where the answer turns on a single minor unit. Above
+    2**53 paisa that conversion rounds, and a value one paisa BELOW the cut-point
+    compares equal to it: at base=9_007_199_254_740_993 with pct=1.0, an
+    insufficient overpayment is reported as material. Nothing rejects amounts
+    that size -- the column is a BigInteger -- so the only thing between this and
+    a wrong verdict was the size of Pakistani receipts.
+
+    `Decimal(str(pct))` rather than `Decimal(pct)`: the second faithfully
+    reproduces the float's own error, which is the thing being avoided. Going via
+    the repr gives the number the policy author actually wrote.
+    """
+    return Decimal(str(pct)) * base_minor
 
 
 def is_power_of_ten_multiple(claim_minor: int, ledger_minor: int) -> bool:

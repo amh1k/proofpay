@@ -605,6 +605,24 @@ def _reasons_for(rule: Rule, ctx: Context) -> tuple[ReasonCode, ...]:
     noise dressed as a finding.
     """
     codes: list[ReasonCode] = list(rule.reasons)
+
+    # A contradicted field is derived, not `R075`'s private property, for the
+    # same reason the overpayment magnitude is: the merchant is owed both facts,
+    # not whichever one the winning rule happens to be about.
+    #
+    # `R065`, `R067` and `R070` all outrank `R075`, so any of them takes a claim
+    # whose sender name flatly disagrees with the transaction it matched, and the
+    # contradiction vanished from the reasons. The merchant was told only that a
+    # field was hard to read, or that the amount was short -- while the evidence
+    # that this payment may belong to a different customer went unmentioned. It
+    # is the more serious of the two findings and it was the one being dropped.
+    #
+    # Placed FIRST so the explainer's contradiction sentence leads, which is what
+    # it already does and why: the contradiction is the reason a human is looking
+    # at this at all.
+    if ctx.has_contradicting_field:
+        codes.insert(0, ReasonCode.FIELD_CONTRADICTS_MATCH)
+
     if ctx.amount_compared:
         codes.extend(ctx.amount.reason_codes)
     return tuple(ReasonCode(c) for c in _dedupe(codes))

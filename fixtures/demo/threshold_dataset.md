@@ -61,7 +61,7 @@ All 30 manifest cases driven end to end -- committed JPEG bytes through
 `backend/tests/test_manifest_end_to_end.py`, imported rather than reimplemented.
 
 The engine reaches the manifest's **status on 20 of 30** cases,
-and its status *and* stated reason on **11 of 30**. Those gaps are
+and its status *and* stated reason on **15 of 30**. Those gaps are
 diagnosed case by case in the harness's `KNOWN_DISAGREEMENTS`; they are not threshold
 problems, and section 4 explains why moving a threshold will not close most of them.
 
@@ -83,12 +83,12 @@ problems, and section 4 explains why moving a threshold will not close most of t
 | `U02` | UNMATCHED | UNMATCHED / NO_CANDIDATES | UNMATCHED | R010 | NO_CANDIDATES | yes |
 | `U03` | UNMATCHED | UNMATCHED / TIMESTAMP_MISMATCH | UNMATCHED | R010 | NO_CANDIDATES | yes |
 | `U04` | UNMATCHED | UNMATCHED / NAME_MISMATCH | UNMATCHED | R010 | NO_CANDIDATES | yes |
-| `S01` | SUSPICIOUS | SUSPICIOUS / CLAIM_INFLATED | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED | yes |
+| `S01` | SUSPICIOUS | SUSPICIOUS / CLAIM_INFLATED | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED, FIELD_CONTRADICTS_MATCH | yes |
 | `S02` | SUSPICIOUS | SUSPICIOUS / REFERENCE_MISMATCH | NEEDS_REVIEW | R075 | AMOUNT_EXACT, CLAIM_CONSISTENT, FIELD_CONTRADICTS_MATCH | **no** |
-| `S03` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED | yes |
-| `S04` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED | yes |
-| `S05` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED | yes |
-| `S06` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED | yes |
+| `S03` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED, FIELD_CONTRADICTS_MATCH | yes |
+| `S04` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED, FIELD_CONTRADICTS_MATCH | yes |
+| `S05` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED, FIELD_CONTRADICTS_MATCH | yes |
+| `S06` | SUSPICIOUS | SUSPICIOUS / FIELD_CONTRADICTS_MATCH | SUSPICIOUS | R030 | AMOUNT_UNDERPAID, CLAIM_INFLATED, FIELD_CONTRADICTS_MATCH | yes |
 | `D01` | DUPLICATE | DUPLICATE / TXN_ALREADY_ALLOCATED | DUPLICATE | R020 | AMOUNT_EXACT, CLAIM_CONSISTENT, TXN_ALREADY_ALLOCATED | yes |
 | `D02` | DUPLICATE | DUPLICATE / PROOF_REUSED | VERIFIED | R090 | AMOUNT_EXACT, CLAIM_CONSISTENT, STRONG_FIELD_AGREEMENT | **no** |
 | `D03` | DUPLICATE | DUPLICATE / PROOF_REUSED | VERIFIED | R090 | AMOUNT_EXACT, CLAIM_CONSISTENT, STRONG_FIELD_AGREEMENT | **no** |
@@ -191,7 +191,7 @@ that neither kind gets filed as the other.
 | `w_amount` | `1` | `0.2` | `1.4` | `D02`, `D03`, `G01`, `N06`, `S02` | `N01`, `N02` |
 | `w_timestamp` | `0.8` | `0.5` | `1.6` | `G07`, `N06` | `N01`, `N02` |
 | `w_sender_name` | `0.6` | `0.4` | `0.9` | `D02`, `D03`, `G01`, `N06` | `N01`, `N02` |
-| `amount_tolerance_minor` | `0` | none | `50,000` | `N01` | -- |
+| `amount_tolerance_minor` | `0` | none | `50,000` | `N01` | `S01`, `S03`, `S04`, `S05`, `S06` |
 | `inflation_material_minor` | `5,000` | none | `500,000` | `S01`, `S03`, `S04`, `S05`, `S06` | -- |
 | `inflation_material_pct` | `0.01` | none | none | -- | -- |
 | `overpayment_material_minor` | `20,000` | none | `500,000` | `N02` | -- |
