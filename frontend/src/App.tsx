@@ -459,18 +459,7 @@ export default function App(): ReactElement {
       {/* `minHeight: 0` inline, not `min-h-0`: the spacing scale has no 0 step so
         * that utility generates nothing, and without it a flex child refuses to
         * shrink below its content and the overflow never engages. */}
-      <main
-        className="flex flex-1 flex-col overflow-y-auto"
-        style={{
-          minHeight: 0,
-          // Reserve the scrollbar's width whether or not one is needed. Without
-          // it the upload screen at 1920x950 overflows by NINE pixels, so the
-          // scrollbar appears, which narrows the content, which reflows the
-          // picker and the heading. The result is a visible flicker on the
-          // screen the merchant looks at most, over nine pixels.
-          scrollbarGutter: 'stable',
-        }}
-      >
+      <main className="flex flex-1 flex-col overflow-y-auto" style={{ minHeight: 0 }}>
       {screen === 'upload' && (
         <UploadScreen
           onSubmit={onSubmit}
