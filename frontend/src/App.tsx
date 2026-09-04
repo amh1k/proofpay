@@ -346,6 +346,25 @@ export default function App(): ReactElement {
     loadHistory()
   }, [loadOrders, loadHistory])
 
+  /**
+   * Every screen starts at the top.
+   *
+   * The upload screen deliberately scrolls "Check this payment" into view when a
+   * file is chosen (`UploadScreen`), and nothing put that scroll back. The
+   * verdict then rendered underneath it: at 1280x800 the browser clamps to zero
+   * because the verdict page is short enough not to scroll, which hid this
+   * completely. At 1280x720 -- a projector, and the size this gets recorded at --
+   * the headline landed 579px ABOVE the viewport. The room saw the evidence list
+   * and never the word.
+   *
+   * On `screen` rather than on the result, so it also covers going back to the
+   * upload screen and opening a list. A screen change is a new thing to read and
+   * it starts where reading starts.
+   */
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [screen])
+
   /** Escape is the same control as the button, for the presenter's laptop. */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
