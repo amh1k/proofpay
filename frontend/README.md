@@ -33,13 +33,19 @@ write a set in which an order in the picker has no check behind it.
 ## Against the live API
 
 ```bash
+# Linux / macOS
 VITE_USE_MOCKS=false npm run dev
+```
+
+```powershell
+# Windows PowerShell
+$env:VITE_USE_MOCKS='false'; npm run dev
 ```
 
 with the backend up:
 
 ```bash
-cd ../backend && python -m uv run uvicorn proofpay.main:app --reload
+cd ../backend && uv run uvicorn proofpay.main:app --reload
 ```
 
 Sign-in is automatic and silent — the first call that needs a token posts to
