@@ -35,10 +35,10 @@ export function NavStrip({ items, active, onSelect }: NavStripProps): ReactEleme
 
   return (
     <nav
-      // The gutter is on the strip, not on the cells: four equal cells still
-      // divide the width evenly, and the first and last labels stay clear of the
-      // outer 5% of the viewport where a projector's edge eats them.
-      className="flex shrink-0 border-t-2 px-3 md:px-8 lg:px-12"
+      // The cells reach both viewport edges so an active first/last cell never
+      // looks accidentally clipped. Extra padding on those two cells keeps the
+      // labels clear of the outer 5% a projector may eat.
+      className="flex shrink-0 border-t-2"
       style={{ background: 'var(--color-ink)', borderColor: HAIRLINE }}
       aria-label="ProofPay"
     >
@@ -48,13 +48,15 @@ export function NavStrip({ items, active, onSelect }: NavStripProps): ReactEleme
           type="button"
           onClick={() => onSelect(cell.key)}
           aria-current={active === cell.key ? 'page' : undefined}
-          className="flex-1 cursor-pointer px-2 py-3 text-left md:px-4 md:py-4"
+          className={
+            'pp-interactive pp-nav-cell flex-1 cursor-pointer px-2 py-3 text-left' +
+            ' first:pl-6 last:pr-6 md:px-4 md:py-4 md:first:pl-12 md:last:pr-12' +
+            ' lg:first:pl-16 lg:last:pr-16'
+          }
           style={{
             // `min-w-0` generates nothing — the spacing scale has no 0 step — and
             // without it a cell refuses to shrink below its longest label.
             minWidth: 0,
-            color: active === cell.key ? 'var(--color-on-field)' : 'var(--color-on-field-dim)',
-            background: active === cell.key ? 'rgba(255,255,255,.08)' : 'transparent',
             borderRight: i < cells.length - 1 ? `2px solid ${HAIRLINE}` : undefined,
           }}
         >

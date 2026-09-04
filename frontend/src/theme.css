@@ -21,6 +21,7 @@
    * surfaces without looking like two products; white on it measures 17.26:1 and
    * the dim white 8.70:1, both computed rather than eyeballed. */
   --color-ink-raised: #181b20;   /* the body between the strips                */
+  --color-source: #78b8c8;       /* trusted provider data; 7.80:1 on raised ink */
   --color-mismatch: #7a0f22;     /* white on it = 10.94:1                      */
   --color-duplicate: #7a0f22;    /* same field, different glyph                */
   --color-verified: #0b4f3f;     /* white on it                                */
@@ -163,6 +164,100 @@
   button {
     font: inherit;
     color: inherit;
+  }
+}
+
+/* ── interaction ───────────────────────────────────────────────────────────────────── */
+
+@layer components {
+  /* One small hue, one meaning: a control the merchant can act on, or the
+   * provider-owned record ProofPay trusts. Verdict colours never enter chrome. */
+  .pp-interactive {
+    transition:
+      background-color 140ms ease-out,
+      border-color 140ms ease-out,
+      box-shadow 140ms ease-out,
+      color 140ms ease-out,
+      transform 80ms ease-out;
+  }
+
+  .pp-interactive:focus-visible {
+    outline-color: var(--color-source);
+  }
+
+  .pp-interactive:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .pp-outline-control {
+    background: transparent;
+    border: 3px solid var(--color-on-field);
+    color: var(--color-on-field);
+  }
+
+  .pp-order-control[aria-checked='true'] {
+    background: var(--color-on-field);
+    border-color: var(--color-source);
+    color: var(--color-on-paper);
+  }
+
+  .pp-chrome-control {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.32);
+    color: var(--color-on-field);
+  }
+
+  .pp-drop-target {
+    background: transparent;
+    border: 3px dashed rgba(255, 255, 255, 0.32);
+  }
+
+  .pp-drop-layout {
+    display: grid;
+  }
+
+  .pp-drop-target[data-dragging='true'] {
+    background: rgba(120, 184, 200, 0.08);
+    border-color: var(--color-source);
+  }
+
+  .pp-nav-cell {
+    background: transparent;
+    color: var(--color-on-field-dim);
+  }
+
+  .pp-nav-cell[aria-current='page'] {
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 3px 0 var(--color-source);
+    color: var(--color-on-field);
+  }
+
+  @media (hover: hover) {
+    .pp-outline-control:hover:not(:disabled),
+    .pp-chrome-control:hover:not(:disabled) {
+      background: rgba(120, 184, 200, 0.08);
+      border-color: var(--color-source);
+    }
+
+    .pp-order-control[aria-checked='true']:hover:not(:disabled) {
+      background: var(--color-on-field);
+    }
+
+    .pp-drop-target:hover {
+      background: rgba(120, 184, 200, 0.04);
+      border-color: var(--color-source);
+    }
+
+    .pp-nav-cell:hover {
+      background: rgba(120, 184, 200, 0.08);
+      color: var(--color-on-field);
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .pp-drop-layout {
+      grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+    }
   }
 }
 
