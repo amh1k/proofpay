@@ -14,6 +14,13 @@
    * mismatch/duplicate share a field on purpose: the silhouette separates them.
    */
   --color-ink: #101214;          /* ground for all chrome                      */
+  /* One step up from the chrome, for the screen BETWEEN the two strips. The app
+   * was a single flat sheet of #101214 with hairlines drawn on it, so the header
+   * and the nav strip read as part of the page rather than as the frame around
+   * it. 1.09:1 against the chrome is deliberately just enough to separate two
+   * surfaces without looking like two products; white on it measures 17.26:1 and
+   * the dim white 8.70:1, both computed rather than eyeballed. */
+  --color-ink-raised: #181b20;   /* the body between the strips                */
   --color-mismatch: #7a0f22;     /* white on it = 10.94:1                      */
   --color-duplicate: #7a0f22;    /* same field, different glyph                */
   --color-verified: #0b4f3f;     /* white on it                                */
@@ -78,8 +85,21 @@
  * breakpoint Tailwind ships measures width, so a sign tuned on a laptop pushes
  * its two buttons under the fold on the one screen that matters. `short:` is the
  * height answer, and it only ever tightens vertical rhythm — it never changes
- * what is on the screen, and it stays on the nine-step spacing scale. */
-@custom-variant short (@media (max-height: 820px));
+ * what is on the screen, and it stays on the nine-step spacing scale.
+ *
+ * 1200, not 820, and the number is measured rather than chosen. The loose
+ * rhythm makes the upload screen 1135px tall at 1920 wide, which is taller than
+ * every viewport anyone here actually has: a 1080p laptop loses ~130px to
+ * browser chrome and the taskbar, so the real figure is about 950. The old
+ * threshold described the projector and forgot the laptop driving it, and the
+ * result was that the loose rhythm never fit anything and the nav strip sat
+ * below the fold on the screen the merchant uses most.
+ *
+ * At 1200 the tight rhythm covers every realistic laptop and projector, and the
+ * loose one is what a large external monitor gets. That is the right way round.
+ * `short:` still only tightens vertical rhythm; it never changes what is on the
+ * screen and it stays on the nine-step spacing scale. */
+@custom-variant short (@media (max-height: 1200px));
 
 /* ── utilities ─────────────────────────────────────────────────────────────── */
 

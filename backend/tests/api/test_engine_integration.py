@@ -76,4 +76,13 @@ def test_deterministic_extraction_is_bound_to_uploaded_fixture_bytes() -> None:
             merchant_id=MERCHANT_ID,
         )
     assert exc_info.value.status_code == 422
-    assert "committed synthetic demo fixtures" in str(exc_info.value.detail)
+
+    # Assert what the message must DO, not how it is worded. The old assertion
+    # pinned the exact phrase "committed synthetic demo fixtures", which is the
+    # implementation talking: the person who reads this is usually someone at a
+    # demo who has just dropped in their own screenshot, and they cannot act on
+    # the name of an extractor. So the refusal has to say what would make it
+    # work, and it must not leak internals.
+    detail = str(exc_info.value.detail)
+    assert "Qwen-VL key" in detail, f"the refusal must say what would make it work: {detail!r}"
+    assert "extractor" not in detail.lower(), f"names an internal: {detail!r}"

@@ -44,6 +44,7 @@ import {
   ORDER_NONE,
   ORDER_PICKER_HINT,
   ORDER_REQUIRED,
+  TRUST_PAIR,
   UPLOAD_HINT,
   UPLOAD_META,
   UPLOAD_TITLE,
@@ -107,6 +108,9 @@ const NOT_AN_IMAGE = 'That is not an image. Share the screenshot itself.'
 const DASH = 'rgba(255,255,255,.32)'
 const DASH_LIVE = 'rgba(255,255,255,.72)'
 const WASH = 'rgba(255,255,255,.06)'
+
+/** The rule between the invitation and the argument beside it. */
+const HAIRLINE = 'rgba(255,255,255,.16)'
 
 /** Every button on this screen. Rule 5: one weight, no primary. */
 const BUTTON: CSSProperties = {
@@ -529,8 +533,8 @@ export function UploadScreen({
        * rhythm is what pays for it — the alternative is shrinking type that has to
        * carry to the back of a room. Rule: `short:` may tighten spacing, never
        * type. */
-      className="flex flex-1 flex-col gap-8 px-6 py-12 short:gap-4 short:py-8 md:px-12 lg:px-16"
-      style={{ background: 'var(--color-ink)', color: 'var(--color-on-field)' }}
+      className="flex flex-1 flex-col gap-8 px-6 py-12 short:gap-4 short:py-6 md:px-12 lg:px-16"
+      style={{ background: 'var(--color-ink-raised)', color: 'var(--color-on-field)' }}
     >
       {/* First, because the answer to "is this payment real" depends on it. */}
       <OrderPicker orders={orders} selectedOrderId={selectedOrderId} onSelect={chooseOrder} />
@@ -547,21 +551,51 @@ export function UploadScreen({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className="flex flex-1 cursor-pointer flex-col justify-center gap-6 p-8 short:gap-4 short:p-6 md:p-12"
+        className="flex flex-1 cursor-pointer items-center gap-12 p-8 short:gap-8 short:p-6 md:p-12"
         style={{
           border: `3px dashed ${dragging ? DASH_LIVE : DASH}`,
           background: dragging ? WASH : 'transparent',
         }}
       >
-        <h1 className="text-verdict m-0" style={{ maxWidth: '13ch' }}>
-          {UPLOAD_TITLE}
-        </h1>
-        <p
-          className="text-lede m-0"
-          style={{ color: 'var(--color-on-field-dim)', maxWidth: '34ch' }}
+        {/* `minWidth: 0` inline, not `min-w-0`: the spacing scale has no 0 step.
+          * Without it the heading refuses to shrink and pushes the pair off. */}
+        <div className="flex flex-col justify-center gap-6 short:gap-4" style={{ minWidth: 0 }}>
+          <h1 className="text-verdict m-0" style={{ maxWidth: '13ch' }}>
+            {UPLOAD_TITLE}
+          </h1>
+          <p
+            className="text-lede m-0"
+            style={{ color: 'var(--color-on-field-dim)', maxWidth: '34ch' }}
+          >
+            {DROP_SUB}
+          </p>
+        </div>
+
+        {/* The product's argument, in the half of this target that was empty.
+          *
+          * At 1920 the heading occupies the left third and two thirds were
+          * nothing, on the screen a judge sees first. What belongs there is not
+          * decoration: it is the reason any of this works, and it was previously
+          * one line of small caps at the very bottom where nobody reads it.
+          *
+          * `hidden lg:flex` because below that width there is no empty half to
+          * fill -- the heading already uses the whole line, and stacking these
+          * underneath would push the action button off a laptop screen. */}
+        <div
+          className="ml-auto hidden shrink-0 flex-col gap-6 border-l-2 pl-8 short:gap-4 lg:flex"
+          style={{ borderColor: HAIRLINE, maxWidth: '34ch' }}
         >
-          {DROP_SUB}
-        </p>
+          {TRUST_PAIR.map((item) => (
+            <div key={item.label}>
+              <b className="cap block" style={{ color: 'var(--color-on-field)' }}>
+                {item.label}
+              </b>
+              <span className="block" style={{ color: 'var(--color-on-field-dim)' }}>
+                {item.body}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <input
@@ -684,9 +718,16 @@ export function UploadScreen({
         </div>
       )}
 
-      <p className="cap m-0" style={{ color: 'var(--color-on-field-dim)', maxWidth: '60ch' }}>
+      {/* The side-by-side trust argument replaces this line on wide screens.
+        * Below `lg` that block is hidden to protect the action from being pushed
+        * below the viewport, so the compact sentence remains the whole thesis. */}
+      <p
+        className="cap m-0 lg:hidden"
+        style={{ color: 'var(--color-on-field-dim)', maxWidth: '60ch' }}
+      >
         {UPLOAD_META}
       </p>
+
     </section>
   )
 }
